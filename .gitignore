@@ -1,0 +1,8 @@
+.venv
+saved_models/
+__pycache__
+three_word_data_large.json
+three_word_data_medium.json
+notes/
+data/
+hidden_vars.py
