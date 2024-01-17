@@ -240,6 +240,7 @@ class RewardSearchLossSmall(nn.Module):
         return loss_model + loss_search
 
 class RewardSearchLoss(RewardSearchLossSmall):
+    """Current best performing loss function for the full game of Codenames"""
     def __init__(self, model_marg=0.2, search_marg=0.7, device='cpu', normalize=True, absolute_score=False):
         super().__init__(model_marg, device, normalize, absolute_score)
 
