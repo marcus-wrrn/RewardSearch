@@ -92,52 +92,7 @@ Validation Loss: 0.4110034789144993, Validation Score: 5.031299879550934
 Neutral Value Train: 99577.0, Assasin Value Train: 2.0
 Negative Value Train: 421.0, Validation: 0.205
 
-# Training without reward search loss, where results are measured by the embedding with the closest word embedding to the model output
-(.venv) marcuswrrn@marcus:~/Projects/Machine_Learning/NLP/Codenames$ python ./src/train_codenames.py -e 5 -b 500 -code_data "./data/words_extended.json" -guess_data "./data/codewords_full_w_assassin_valid.json" -val_guess_data "./data/codewords_full_w_assassin_mini.json" -prune_search 'N' -model_out "no_search_loss.pth" -loss_out "no_search_loss.png"
-Device: cuda
-Training Length: 100000
-Training
-Starting training at: 2024-01-17 23:31:45.529007
-Epoch: 1
-2024-01-17 23:31:46.984966: Iteration: 0/200
-2024-01-17 23:32:18.902010: Iteration: 100/200
-2024-01-17 23:33:01.846284, Epoch: 1
-Training Loss: 0.6581338006258011, Training Score: 0.9119000448286534
-Validation Loss: 0.5449797242879868, Validation Score: 1.8606999576091767
-Neutral Value Train: 37010.0, Assasin Value Train: 5308.0
-Negative Value Train: 57682.0, Validation: 29.44
-Epoch: 2
-2024-01-17 23:33:03.805442: Iteration: 0/200
-2024-01-17 23:33:44.582360: Iteration: 100/200
-2024-01-17 23:34:37.269909, Epoch: 2
-Training Loss: 0.5024716824293136, Training Score: 2.3115701121091843
-Validation Loss: 0.4722199548780918, Validation Score: 2.6177999389171602
-Neutral Value Train: 36658.0, Assasin Value Train: 5099.0
-Negative Value Train: 58243.0, Validation: 29.59
-Epoch: 3
-2024-01-17 23:34:39.717552: Iteration: 0/200
-2024-01-17 23:35:22.858175: Iteration: 100/200
-2024-01-17 23:36:15.832711, Epoch: 3
-Training Loss: 0.455152175873518, Training Score: 2.7055001318454743
-Validation Loss: 0.44066434890031814, Validation Score: 2.8265999329090117
-Neutral Value Train: 36714.0, Assasin Value Train: 5546.0
-Negative Value Train: 57740.0, Validation: 28.96
-Epoch: 4
-2024-01-17 23:36:18.225663: Iteration: 0/200
-2024-01-17 23:37:00.948778: Iteration: 100/200
-2024-01-17 23:37:53.869701, Epoch: 4
-Training Loss: 0.430771317332983, Training Score: 2.846790136098862
-Validation Loss: 0.42198474377393724, Validation Score: 2.9032999205589296
-Neutral Value Train: 36966.0, Assasin Value Train: 5816.0
-Negative Value Train: 57218.0, Validation: 28.925
-Epoch: 5
-2024-01-17 23:37:56.264504: Iteration: 0/200
-2024-01-17 23:38:40.361392: Iteration: 100/200
-2024-01-17 23:39:36.330203, Epoch: 5
-Training Loss: 0.4155240872502327, Training Score: 2.9254801297187805
-Validation Loss: 0.4095870906114578, Validation Score: 2.9632999336719514
-Neutral Value Train: 36988.0, Assasin Value Train: 5915.0
-Negative Value Train: 57097.0, Validation: 29.205
+
 
 # Training without reward search loss, where results are measured by the embedding with the closest word embedding to the model output
 (.venv) marcuswrrn@marcus:~/Projects/Machine_Learning/NLP/Codenames$ python ./src/train_codenames.py -e 5 -b 500 -code_data "./data/words_extended.json" -guess_data "./data/codewords_full_w_assassin_valid.json" -val_guess_data "./data/codewords_full_w_assassin_mini.json" -prune_search 'N' -model_out "with_search_loss.pth" -loss_out "with_search_loss.png"
@@ -186,4 +141,49 @@ Validation Loss: 1.236578084230423, Validation Score: 2.893799933195114
 Neutral Value Train: 49712.0, Assasin Value Train: 4122.0
 Negative Value Train: 46166.0, Validation: 23.44
 
-
+# Training without reward search loss, where results are measured by the embedding with the closest word embedding to the model output
+(.venv) marcuswrrn@marcus:~/Projects/Machine_Learning/NLP/Codenames$ python ./src/train_codenames.py -e 5 -b 500 -code_data "./data/words_extended.json" -guess_data "./data/codewords_full_w_assassin_valid.json" -val_guess_data "./data/codewords_full_w_assassin_mini.json" -prune_search 'N' -model_out "no_search_loss.pth" -loss_out "no_search_loss.png"
+Device: cuda
+Training Length: 100000
+Training
+Starting training at: 2024-01-17 23:31:45.529007
+Epoch: 1
+2024-01-17 23:31:46.984966: Iteration: 0/200
+2024-01-17 23:32:18.902010: Iteration: 100/200
+2024-01-17 23:33:01.846284, Epoch: 1
+Training Loss: 0.6581338006258011, Training Score: 0.9119000448286534
+Validation Loss: 0.5449797242879868, Validation Score: 1.8606999576091767
+Neutral Value Train: 37010.0, Assasin Value Train: 5308.0
+Negative Value Train: 57682.0, Validation: 29.44
+Epoch: 2
+2024-01-17 23:33:03.805442: Iteration: 0/200
+2024-01-17 23:33:44.582360: Iteration: 100/200
+2024-01-17 23:34:37.269909, Epoch: 2
+Training Loss: 0.5024716824293136, Training Score: 2.3115701121091843
+Validation Loss: 0.4722199548780918, Validation Score: 2.6177999389171602
+Neutral Value Train: 36658.0, Assasin Value Train: 5099.0
+Negative Value Train: 58243.0, Validation: 29.59
+Epoch: 3
+2024-01-17 23:34:39.717552: Iteration: 0/200
+2024-01-17 23:35:22.858175: Iteration: 100/200
+2024-01-17 23:36:15.832711, Epoch: 3
+Training Loss: 0.455152175873518, Training Score: 2.7055001318454743
+Validation Loss: 0.44066434890031814, Validation Score: 2.8265999329090117
+Neutral Value Train: 36714.0, Assasin Value Train: 5546.0
+Negative Value Train: 57740.0, Validation: 28.96
+Epoch: 4
+2024-01-17 23:36:18.225663: Iteration: 0/200
+2024-01-17 23:37:00.948778: Iteration: 100/200
+2024-01-17 23:37:53.869701, Epoch: 4
+Training Loss: 0.430771317332983, Training Score: 2.846790136098862
+Validation Loss: 0.42198474377393724, Validation Score: 2.9032999205589296
+Neutral Value Train: 36966.0, Assasin Value Train: 5816.0
+Negative Value Train: 57218.0, Validation: 28.925
+Epoch: 5
+2024-01-17 23:37:56.264504: Iteration: 0/200
+2024-01-17 23:38:40.361392: Iteration: 100/200
+2024-01-17 23:39:36.330203, Epoch: 5
+Training Loss: 0.4155240872502327, Training Score: 2.9254801297187805
+Validation Loss: 0.4095870906114578, Validation Score: 2.9632999336719514
+Neutral Value Train: 36988.0, Assasin Value Train: 5915.0
+Negative Value Train: 57097.0, Validation: 29.205
