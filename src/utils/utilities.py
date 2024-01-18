@@ -8,7 +8,9 @@ def get_device(is_cuda: str):
         return torch.device("cuda")
     return torch.device("cpu")
 
-
+def convert_args_str_to_bool(arg: str):
+    return True if arg.lower() == 'y' else False
+ 
 def save_loss_plot(losses_train: list, losses_test: list, save_path: str):
     # Plot training losses
     plt.plot([i for i in range(len(losses_train))], losses_train, label='Training Loss')
