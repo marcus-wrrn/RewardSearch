@@ -201,13 +201,13 @@ class MultiObjectiveScoringLoss(nn.Module):
         return loss.mean(), target_loss.mean(), results.mean()
 
 class RewardSearchLossSmall(nn.Module):
-    def __init__(self, margin=0.2, device='cpu', normalize=True, absolute_score=False):
+    def __init__(self, margin=0.2, device='cpu', normalize=True, exp_score=False):
         super().__init__()
         self.margin = margin
         self.device = device
         self.normalize = normalize
 
-        self.absolute_score = absolute_score
+        self.exp_score = exp_score
 
     @property
     def name(self):
@@ -223,7 +223,7 @@ class RewardSearchLossSmall(nn.Module):
         neg_score = torch.cat((neg_score, neut_score), dim=1).mean(dim=1)
         pos_score = pos_score.mean(dim=1)
 
-        if self.absolute_score:
+        if self.exp_score:
             pos_score = pos_score.exp2()
             neg_score = neg_score.exp2()
         
@@ -241,8 +241,8 @@ class RewardSearchLossSmall(nn.Module):
 
 class RewardSearchLoss(RewardSearchLossSmall):
     """Current best performing loss function for the full game of Codenames"""
-    def __init__(self, model_marg=0.2, search_marg=0.7, device='cpu', normalize=True, absolute_score=False):
-        super().__init__(model_marg, device, normalize, absolute_score)
+    def __init__(self, model_marg=0.2, search_marg=0.7, device='cpu', normalize=True, exp_score=False):
+        super().__init__(model_marg, device, normalize, exp_score)
 
         self.search_marg = search_marg
     
@@ -261,7 +261,7 @@ class RewardSearchLoss(RewardSearchLossSmall):
         neg_score = torch.cat((neg_score, neut_score, assas_score), dim=1).mean(dim=1)
         pos_score = pos_score.mean(dim=1)
 
-        if self.absolute_score:
+        if self.exp_score:
             pos_score = pos_score.exp2()
             neg_score = neg_score.exp2()
         

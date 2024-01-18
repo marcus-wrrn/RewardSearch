@@ -8,6 +8,8 @@ from models.base_models import SentenceEncoder
 from scipy.stats import wasserstein_distance
 
 
+# Primary Codenames models, used in current tests
+
 class MOROutObj:
     def __init__(self, words, model_out, search_out, search_out_max, search_out_min):
         self.words = words
@@ -20,7 +22,7 @@ class MORSpyMaster(nn.Module):
     """
     Multi-Objective Retrieval model for codenames with 4 competing objectives
     """
-    def __init__(self, vocab: VectorSearch, device: torch.device, neutral_weight=1.0, negative_weight=0.0, assassin_weights=-10.0, backbone='all-mpnet-base-v2', vocab_size=80):
+    def __init__(self, vocab: VectorSearch, device: torch.device, neutral_weight=1.0, negative_weight=0.0, assassin_weights=-10.0, backbone='all-mpnet-base-v2', vocab_size=80, search_pruning=False):
         super().__init__()
         self.encoder = SentenceEncoder(backbone)
         self.vocab_size = vocab_size
@@ -40,6 +42,8 @@ class MORSpyMaster(nn.Module):
         )
         self.vocab = vocab
         self.device = device
+
+        self.search_pruning = search_pruning
 
     def _process_embeddings(self, embs: Tensor):
         """Mean pool and normalize all embeddings"""
@@ -83,7 +87,7 @@ class MORSpyMaster(nn.Module):
         combined_rewards = torch.cat((neg_reward, neut_reward, assas_reward))
         combined_rewards = combined_rewards.expand((combined.shape[0], self.vocab_size, combined_rewards.shape[0]))
         rewards = torch.gather(combined_rewards, 2, indices)
-        
+
         # Find the values of the first index, equal to the given reward (score of the most similar unwanted embedding)
         # Due to the sequential nature of codenames only the first non-target guess matters
         reward = rewards[:, :, 0]
@@ -125,6 +129,17 @@ class MORSpyMaster(nn.Module):
 
         return highest_scoring_embedding, highest_scoring_embedding_index, max_embeddings_pooled, min_embeddings_pooled
     
+
+    def _prune_word_embeddings(self, word_embeddings: Tensor, model_out: Tensor, sim_cutoff=0.08):
+        model_out_expanded = model_out.unsqueeze(1)
+        # Calculate similarity
+        sim_scores = F.cosine_similarity(word_embeddings, model_out_expanded, dim=2)
+        # Find average batch score
+        mean_score = sim_scores.mean(dim=1).mean()
+        # Create pruning algorithm
+
+        print() # NOP for breakpoint
+
     def forward(self, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assassin_emb: Tensor) -> MOROutObj | tuple:
         neg_emb = self._process_embeddings(neg_embs)
         neut_emb = self._process_embeddings(neut_embs)
@@ -138,13 +153,18 @@ class MORSpyMaster(nn.Module):
         # ANN Search
         words, word_embeddings, dist = self.vocab.search(model_out, num_results=self.vocab_size)
         word_embeddings = torch.tensor(word_embeddings).to(self.device).squeeze(1)
+        if self.search_pruning:
+            self._prune_word_embeddings(word_embeddings, model_out)
+
         
         search_out, search_out_index, search_out_max, search_out_min = self.find_search_embeddings(word_embeddings, pos_embs, neg_embs, neut_embs, assassin_emb)
 
         if self.training:
-            return model_out, word_embeddings[:, 0], search_out_max, search_out_min
+            return model_out, search_out, search_out_max, search_out_min
         
         return MOROutObj(words[search_out_index.cpu()][:, :1], model_out, search_out, search_out_max, search_out_min)
+
+
 
 class MORSpyMasterSmall(nn.Module):
     """
