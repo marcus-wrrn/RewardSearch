@@ -25,3 +25,5 @@ Currently the models best implementation can guess a word that on average result
 I am still experimenting with the model and tweaking the loss function so I will have more detailed results posted soon. However, it should be noted that these results already show better performance than a person (typically only getting about 2-3/9 words correct on the first turn) and the neutral vs. negative word selection rate shows that the current loss function `RewardSearchLoss` is capable of handling multiple objectives in a similarity search related context.
 
 Another intersting observation is that when the model output (not the search output) is used for the word selection task, the model is capable of achieving a 8.46/9 target words selected in the first turn alongside much higher neutral vs. negative selection rates. 
+
+Please note that this work is planned to be part of a much larger research project, to be presented alongside an official paper. If you use any of the following work I simply ask that you cite this github repository directly or to Marcus Warren. 
