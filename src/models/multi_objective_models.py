@@ -75,9 +75,9 @@ class MORSpyMaster(nn.Module):
 
         if reverse:
             # Find the inverse of the positive reward (num incorrect)
-            return pos_reward.shape[0] - num_correct
+            return (pos_reward.shape[0] - num_correct)
         
-        return num_correct
+        return num_correct 
 
     def _get_reward_tensor(self, size: int, weight: float, reverse: bool) -> Tensor:
         reward = torch.ones(size).to(self.device) * weight
@@ -184,28 +184,16 @@ class MORSpyMaster(nn.Module):
         return MOROutObj(words[search_out_index.cpu()][:, :1], model_out, search_out, search_out_max, search_out_min)
     
 class MORSpyWasserstein(MORSpyMaster):
+    """Currently in development"""
+
     def __init__(self, vocab: VectorSearch, device: device, neutral_weight=1, negative_weight=0, assas_weights=-10, backbone='all-mpnet-base-v2', vocab_size=80, search_pruning=False):
         super().__init__(vocab, device, neutral_weight, negative_weight, assas_weights, backbone, vocab_size, search_pruning)
     
     def _wasserstein_rot(self, pos_dist: Tensor, pos_weights: Tensor, neg_dist: Tensor, neg_weights: Tensor):
         """Wasserstein Rotation between the normalized scores of both positive and negative distributions"""
-        # # Sort the distributions and their corresponding weights
-        # sorted_indices1 = torch.argsort(pos_dist)
-        # sorted_distribution1 = pos_dist[sorted_indices1]
-        # sorted_weights1 = pos_weights[sorted_indices1].cumsum(0)
+        # TODO: Normalize weights to be in line with a normal CDF
 
-        # sorted_indices2 = torch.argsort(neg_dist)
-        # sorted_distribution2 = neg_dist[sorted_indices2]
-        # sorted_weights2 = neg_weights[sorted_indices2].cumsum(0)
-
-        all_values = torch.cat((pos_dist, neg_dist), dim=1)
-
-        # Might not need this
-        #unique_values, indices = torch.unique(all_values, sorted=True, return_inverse=True)
-
-        # Compute the Wasserstein distance
-        distance = torch.sum(torch.abs(pos_weights - neg_weights) * (neg_dist - pos_dist), dim=1)
-
+        distance = torch.sum(torch.abs(neg_weights - pos_weights) * torch.abs(neg_dist - pos_dist), dim=1)
         return distance
     
     def find_search_embeddings(self, word_embeddings: Tensor, pos_encs: Tensor, neg_encs: Tensor, neut_encs: Tensor, assassin_encs: Tensor):
@@ -221,10 +209,10 @@ class MORSpyWasserstein(MORSpyMaster):
 
         # Normalize positive and negative rewards
         #pos_reward_sum = pos_reward.sum(dim=1, keepdim=True)
-        pos_reward_sorted, pos_reward_indices = torch.sort((pos_reward), dim=1)
+        pos_reward_sorted, pos_reward_indices = torch.sort((pos_reward), descending=True, dim=1)
 
         #neg_reward_sum = neg_reward.sum(dim=1, keepdim=True)
-        neg_reward_sorted, neg_reward_indices = torch.sort((neg_reward), dim=1)
+        neg_reward_sorted, neg_reward_indices = torch.sort((neg_reward), descending=True, dim=1)
 
         embeddings_pos = torch.gather(word_embeddings, 1, pos_reward_indices.unsqueeze(-1).expand(-1, -1, word_embeddings.shape[2]))
         embeddings_neg = torch.gather(word_embeddings, 1, neg_reward_indices.unsqueeze(-1).expand(-1, -1, word_embeddings.shape[2]))
