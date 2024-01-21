@@ -1,4 +1,4 @@
-The Training and Validation scores are out of 9, and represent the average number of target words guessed per batch. The rest of the values represent the number of Positive, Negative and Neutral words guessed after, the final Validation number is bugged and can be ignored
+# The Training and Validation scores are out of 9, and represent the average number of target words guessed per batch. The rest of the values represent the number of Positive, Negative and Neutral words guessed, the final Validation number is bugged and can be ignored
 
 # Training with reward search loss, where results are measured by the embedding with the largest score found in the search window
 (.venv) marcuswrrn@marcus:~/Projects/Machine_Learning/NLP/Codenames$ python ./src/train_codenames.py -e 5 -b 500 -code_data "./data/words_extended.json" -guess_data "./data/codewords_full_w_assassin_valid.json" -val_guess_data "./data/codewords_full_w_assassin_mini.json" -prune_search 'N' -model_out "with_search_loss_max_search_out.pth" -loss_out "with_search_loss_max_seach_out.png"
