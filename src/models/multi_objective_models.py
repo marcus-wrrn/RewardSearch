@@ -173,9 +173,9 @@ class MORSpyMaster(nn.Module):
         neut_scores = F.cosine_similarity(word_embs_expanded, neut_encs, dim=3)
         assas_scores = F.cosine_similarity(word_embs_expanded, assas_encs, dim=3)
 
-        tot_reward = self._get_total_reward(pos_encs, neg_encs, neut_encs, assas_encs, reverse=False)
+        tot_reward = self._get_total_reward(word_embs_expanded, pos_encs, neg_encs, neut_encs, assas_encs, reverse=False)
 
-        return self._find_search_embeddings(tot_reward, word_embs_expanded)
+        return self._find_search_embeddings(tot_reward, word_embeddings)
     
 
     def _prune_word_embeddings(self, word_embeddings: Tensor, model_out: Tensor, sim_cutoff=0.08):
