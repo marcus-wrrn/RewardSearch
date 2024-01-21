@@ -2,7 +2,7 @@ import torch
 from torch.optim.lr_scheduler import ExponentialLR
 from loss_fns.loss import  RewardSearchLoss
 from torch.utils.data import DataLoader
-from models.multi_objective_models import MORSpyMaster
+from models.multi_objective_models import MORSpyMaster, MORSpyWasserstein
 from datasets.dataset import CodeNamesDataset
 import numpy as np
 import datetime
@@ -144,7 +144,7 @@ def main(args):
     valid_dataloader = DataLoader(valid_dataset, batch_size=50, num_workers=4)
 
     vector_db = VectorSearch(train_dataset, prune=True)
-    model = MORSpyMaster(vector_db, device, vocab_size, search_pruning=search_pruning)
+    model = MORSpyMaster(vector_db, device, vocab_size=vocab_size, search_pruning=search_pruning)
     model.to(device)
 
     losses_train, losses_valid = train(n_epochs=args.e, model=model, train_loader=train_dataloader, valid_dataloader=valid_dataloader, device=device, model_path=model_out, normalize_reward=normalize_reward)
@@ -162,8 +162,8 @@ if __name__ == "__main__":
     parser.add_argument('-gamma', type=float, default=0.9)
     parser.add_argument('-norm', type=str, help="Whether to normalize reward function, [Y/n]", default='Y')
     parser.add_argument('-val_guess_data', type=str, help="Filepath for the validation dataset", default=BASE_DIR + "data/codewords_full_w_assassin_mini.json")
-    parser.add_argument('-model_out', type=str, default=BASE_DIR + "/saved_models/test.pth")
-    parser.add_argument('-loss_out', type=str, default=BASE_DIR + "/saved_models/test.png")
+    parser.add_argument('-model_out', type=str, default=BASE_DIR + "test.pth")
+    parser.add_argument('-loss_out', type=str, default=BASE_DIR + "test.png")
     parser.add_argument('-cuda', type=str, help="Whether to use CPU or Cuda, use Y or N", default='Y')
     args = parser.parse_args()
     main(args)

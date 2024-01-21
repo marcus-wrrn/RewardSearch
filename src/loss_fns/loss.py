@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal
 import numpy as np
+from torch import Tensor
 
 def triplet_loss(out_embedding, pos_embeddings, neg_embeddings, margin=0):
     pos_sim = util.cos_sim(out_embedding, pos_embeddings)/len(pos_embeddings)
@@ -201,13 +202,13 @@ class MultiObjectiveScoringLoss(nn.Module):
         return loss.mean(), target_loss.mean(), results.mean()
 
 class RewardSearchLossSmall(nn.Module):
-    def __init__(self, margin=0.2, device='cpu', normalize=True, absolute_score=False):
+    def __init__(self, margin=0.2, device='cpu', normalize=True, exp_score=False):
         super().__init__()
         self.margin = margin
         self.device = device
         self.normalize = normalize
 
-        self.absolute_score = absolute_score
+        self.exp_score = exp_score
 
     @property
     def name(self):
@@ -223,7 +224,7 @@ class RewardSearchLossSmall(nn.Module):
         neg_score = torch.cat((neg_score, neut_score), dim=1).mean(dim=1)
         pos_score = pos_score.mean(dim=1)
 
-        if self.absolute_score:
+        if self.exp_score:
             pos_score = pos_score.exp2()
             neg_score = neg_score.exp2()
         
@@ -241,8 +242,8 @@ class RewardSearchLossSmall(nn.Module):
 
 class RewardSearchLoss(RewardSearchLossSmall):
     """Current best performing loss function for the full game of Codenames"""
-    def __init__(self, model_marg=0.2, search_marg=0.7, device='cpu', normalize=True, absolute_score=False):
-        super().__init__(model_marg, device, normalize, absolute_score)
+    def __init__(self, model_marg=0.2, search_marg=0.7, device='cpu', normalize=True, exp_score=False):
+        super().__init__(model_marg, device, normalize, exp_score)
 
         self.search_marg = search_marg
     
@@ -261,7 +262,7 @@ class RewardSearchLoss(RewardSearchLossSmall):
         neg_score = torch.cat((neg_score, neut_score, assas_score), dim=1).mean(dim=1)
         pos_score = pos_score.mean(dim=1)
 
-        if self.absolute_score:
+        if self.exp_score:
             pos_score = pos_score.exp2()
             neg_score = neg_score.exp2()
         
@@ -277,3 +278,17 @@ class RewardSearchLoss(RewardSearchLossSmall):
         loss_search = F.triplet_margin_loss(model_out, search_max, search_min, margin=self.search_marg)
 
         return loss_model + loss_search
+
+class RewardSearchWithWassersteinLoss(RewardSearchLoss):
+    def __init__(self, model_marg=0.2, search_marg=0.7, device='cpu', normalize=True, exp_score=False):
+        super().__init__(model_marg, search_marg, device, normalize, exp_score)
+    
+    def forward(self, model_out: Tensor, wasserstein_rot: Tensor, pos_encs: Tensor, neg_encs: Tensor, neutral_encs: Tensor, assas_encs: Tensor):
+        model_out_expanded = model_out.unsqueeze(1)
+        assas_expanded = assas_encs.unsqueeze(1)
+
+        m_pos_score, m_neg_score, m_neut_score, m_assas_score = self._calc_cos_sim(model_out_expanded, pos_encs, neg_encs, neutral_encs, assas_expanded)
+        pos_score, neg_score = self._calc_final_scores(m_pos_score, m_neg_score, m_neut_score, m_assas_score)
+        loss_model = F.relu((neg_score - pos_score) + self.margin).mean()
+
+        return loss_model + wasserstein_rot.mean()
