@@ -116,7 +116,79 @@ class MORSpyMaster(nn.Module):
 
         return primary_reward + secondary_reward
     
-    def wasserstein_rot(self, pos_dist, pos_weights, neg_dist, neg_weights):
+    def _find_scored_embeddings(self, reward, word_embeddings):
+        # Find lowest scoring and highest scored indices
+        index_max_vals, index_max = torch.topk(reward, k=word_embeddings.shape[1]//2, dim=1)
+        index_min_vals, index_min = torch.topk(reward, k=word_embeddings.shape[1]//2, largest=False, dim=1)
+
+        embeddings_max = torch.gather(word_embeddings, 1, index_max.unsqueeze(-1).expand(-1, -1, word_embeddings.shape[2]))
+        embeddings_min = torch.gather(word_embeddings, 1, index_min.unsqueeze(-1).expand(-1, -1, word_embeddings.shape[2]))
+
+        max_embeddings_pooled = self._process_embeddings(embeddings_max)
+        min_embeddings_pooled = self._process_embeddings(embeddings_min)
+
+        # Highest scoring word embedding
+        highest_scoring_embedding = embeddings_max[:, 0]
+        highest_scoring_embedding_index = index_max[:, 0]
+
+        return highest_scoring_embedding, highest_scoring_embedding_index, max_embeddings_pooled, min_embeddings_pooled
+
+    def find_search_embeddings(self, word_embeddings: Tensor, pos_encs: Tensor, neg_encs: Tensor, neut_encs: Tensor, assassin_encs: Tensor):
+        word_embs_expanded = word_embeddings.unsqueeze(2)
+        # Process encoding shapes
+        pos_encs = self._expand_encodings_for_search(pos_encs)
+        neg_encs = self._expand_encodings_for_search(neg_encs)
+        neut_encs = self._expand_encodings_for_search(neut_encs)
+        assas_encs = self._expand_encodings_for_search(assassin_encs.unsqueeze(1))
+
+        tot_reward = self._get_total_reward(word_embs_expanded, pos_encs, neg_encs, neut_encs, assas_encs, reverse=False)
+
+        return self._find_scored_embeddings(tot_reward, word_embeddings)
+    
+
+    def _prune_word_embeddings(self, word_embeddings: Tensor, model_out: Tensor, sim_cutoff=0.08):
+        model_out_expanded = model_out.unsqueeze(1)
+        # Calculate similarity
+        sim_scores = F.cosine_similarity(word_embeddings, model_out_expanded, dim=2)
+        # Find average batch score
+        std_dev = sim_scores.std(dim=1).mean()
+        # Create pruning algorithm
+
+        print() # NOP for breakpoint
+
+    def _get_combined_input(self, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assas_emb: Tensor) -> Tensor:
+        neg_emb = self._process_embeddings(neg_embs)
+        neut_emb = self._process_embeddings(neut_embs)
+        pos_emb = self._process_embeddings(pos_embs)
+
+        return torch.cat((neg_emb, assas_emb, neut_emb, pos_emb), dim=1)
+
+    def forward(self, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assas_emb: Tensor) -> MOROutObj | tuple:
+        concatenated = self._get_combined_input(pos_embs, neg_embs, neut_embs, assas_emb)
+        model_out = self.fc(concatenated)
+
+        model_out = F.normalize(model_out, p=2, dim=1)
+
+        # ANN Search
+        words, word_embeddings, dist = self.vocab.search(model_out, num_results=self.vocab_size)
+        word_embeddings = torch.tensor(word_embeddings).to(self.device).squeeze(1)
+
+        if self.search_pruning:
+            self._prune_word_embeddings(word_embeddings, model_out)
+
+        search_out, search_out_index, search_out_max, search_out_min = self.find_search_embeddings(word_embeddings, pos_embs, neg_embs, neut_embs, assas_emb)
+
+        if self.training:
+            return model_out, search_out, search_out_max, search_out_min
+        
+        return MOROutObj(words[search_out_index.cpu()][:, :1], model_out, search_out, search_out_max, search_out_min)
+    
+class MORSpyWasserstein(MORSpyMaster):
+    def __init__(self, vocab: VectorSearch, device: device, neutral_weight=1, negative_weight=0, assas_weights=-10, backbone='all-mpnet-base-v2', vocab_size=80, search_pruning=False):
+        super().__init__(vocab, device, neutral_weight, negative_weight, assas_weights, backbone, vocab_size, search_pruning)
+    
+    def wasserstein_rot(self, pos_dist: Tensor, pos_weights: Tensor, neg_dist: Tensor, neg_weights: Tensor):
+        """Wasserstein Rotation between the normalized scores of both positive and negative distributions"""
         # # Sort the distributions and their corresponding weights
         # sorted_indices1 = torch.argsort(pos_dist)
         # sorted_distribution1 = pos_dist[sorted_indices1]
@@ -142,59 +214,6 @@ class MORSpyMaster(nn.Module):
 
         return distance
     
-    def _find_search_embeddings(self, reward, word_embeddings):
-        # Find lowest scoring and highest scored indices
-        index_max_vals, index_max = torch.topk(reward, k=word_embeddings.shape[1]//2, dim=1)
-        index_min_vals, index_min = torch.topk(reward, k=word_embeddings.shape[1]//2, largest=False, dim=1)
-
-        embeddings_max = torch.gather(word_embeddings, 1, index_max.unsqueeze(-1).expand(-1, -1, word_embeddings.shape[2]))
-        embeddings_min = torch.gather(word_embeddings, 1, index_min.unsqueeze(-1).expand(-1, -1, word_embeddings.shape[2]))
-
-        max_embeddings_pooled = self._process_embeddings(embeddings_max)
-        min_embeddings_pooled = self._process_embeddings(embeddings_min)
-
-        # Highest scoring word embedding
-        highest_scoring_embedding = embeddings_max[:, 0]
-        highest_scoring_embedding_index = index_max[:, 0]
-
-        return highest_scoring_embedding, highest_scoring_embedding_index, max_embeddings_pooled, min_embeddings_pooled
-
-    def find_search_embeddings(self, word_embeddings: Tensor, pos_encs: Tensor, neg_encs: Tensor, neut_encs: Tensor, assassin_encs: Tensor):
-        word_embs_expanded = word_embeddings.unsqueeze(2)
-        # Process encoding shapes
-        pos_encs = self._expand_encodings_for_search(pos_encs)
-        neg_encs = self._expand_encodings_for_search(neg_encs)
-        neut_encs = self._expand_encodings_for_search(neut_encs)
-        assas_encs = self._expand_encodings_for_search(assassin_encs.unsqueeze(1))
-
-        # Find Similarity of all found embeddings 
-        pos_scores = F.cosine_similarity(word_embs_expanded, pos_encs, dim=3)
-        neg_scores = F.cosine_similarity(word_embs_expanded, neg_encs, dim=3)
-        neut_scores = F.cosine_similarity(word_embs_expanded, neut_encs, dim=3)
-        assas_scores = F.cosine_similarity(word_embs_expanded, assas_encs, dim=3)
-
-        tot_reward = self._get_total_reward(word_embs_expanded, pos_encs, neg_encs, neut_encs, assas_encs, reverse=False)
-
-        return self._find_search_embeddings(tot_reward, word_embeddings)
-    
-
-    def _prune_word_embeddings(self, word_embeddings: Tensor, model_out: Tensor, sim_cutoff=0.08):
-        model_out_expanded = model_out.unsqueeze(1)
-        # Calculate similarity
-        sim_scores = F.cosine_similarity(word_embeddings, model_out_expanded, dim=2)
-        # Find average batch score
-        std_dev = sim_scores.std(dim=1).mean()
-        # Create pruning algorithm
-
-        print() # NOP for breakpoint
-
-    def _get_combined_input(self, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assas_emb: Tensor) -> Tensor:
-        neg_emb = self._process_embeddings(neg_embs)
-        neut_emb = self._process_embeddings(neut_embs)
-        pos_emb = self._process_embeddings(pos_embs)
-
-        return torch.cat((neg_emb, assas_emb, neut_emb, pos_emb), dim=1)
-
     def forward(self, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assas_emb: Tensor) -> MOROutObj | tuple:
         concatenated = self._get_combined_input(pos_embs, neg_embs, neut_embs, assas_emb)
         model_out = self.fc(concatenated)
