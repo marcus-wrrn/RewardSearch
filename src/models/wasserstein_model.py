@@ -3,8 +3,10 @@ from torch._C import device
 from torch import Tensor, device
 from utils.vector_search import VectorSearch
 from models.multi_objective_models import MORSpyMaster
+import torch.nn.functional as F
 
-"""I don't believe this method is feasible for various reasons, changing direction"""
+
+# I don't believe this method is feasible for various reasons, changing direction
 
 
 class MORSpyWasserstein(MORSpyMaster):
@@ -52,3 +54,26 @@ class MORSpyWasserstein(MORSpyMaster):
 
 
         return highest_scoring_embedding, highest_scoring_embedding_index, (embeddings_pos, embeddings_neg), (pos_reward_sorted, neg_reward_sorted)
+    
+    def forward(self, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assas_emb: Tensor):
+        concatenated = self._get_combined_input(pos_embs, neg_embs, neut_embs, assas_emb)
+        model_out = self.fc(concatenated)
+
+        model_out = F.normalize(model_out, p=2, dim=1)
+
+        # ANN Search
+        words, word_embeddings, dist = self.vocab.search(model_out, num_results=self.vocab_size)
+        word_embeddings = torch.tensor(word_embeddings).to(self.device).squeeze(1)
+
+        search_out, search_out_index, embedding_dist, reward_dist = self.find_search_embeddings(word_embeddings, pos_embs, neg_embs, neut_embs, assas_emb)
+
+        # Find cosine_similarity scores
+        word_embeddings_pos, word_embeddings_neg = embedding_dist
+        pos_reward_dist, neg_reward_dist = reward_dist
+ 
+        pos_rot = F.cosine_similarity(model_out.unsqueeze(1), word_embeddings_pos, dim=2)
+        neg_rot = F.cosine_similarity(model_out.unsqueeze(1), word_embeddings_neg, dim=2)
+
+        wasserstein_rot = self._wasserstein_rot(pos_rot, pos_reward_dist, neg_rot, neg_reward_dist)
+
+        return model_out, search_out, wasserstein_rot
