@@ -292,3 +292,28 @@ class RewardSearchWithWassersteinLoss(RewardSearchLoss):
         loss_model = F.relu((neg_score - pos_score) + self.margin).mean()
 
         return loss_model + wasserstein_rot.mean()
+    
+class RewardSearchWithDualHead(RewardSearchLoss):
+    def __init__(self, model_marg=0.2, search_marg=0.7, device='cpu', normalize=True, exp_score=False):
+        super().__init__(model_marg, search_marg, device, normalize, exp_score)
+    
+    def forward(self, model_out: tuple[Tensor, Tensor], search_outs: tuple[Tensor, Tensor], pos_encs: Tensor, neg_encs: Tensor, neutral_encs: Tensor, assas_encs: Tensor):
+        m_pos_out, m_neg_out = model_out
+        # # Mean pool positive and negative output to find topic output
+        # topic_out = torch.cat((m_pos_expanded, m_neg_expanded), dim=1)
+        # topic_out = torch.mean(topic_out, dim=1, keepdim=True)
+        
+        assas_expanded = assas_encs.unsqueeze(1)
+        m_pos_expanded = m_pos_out.unsqueeze(1)
+        # Calculate topic loss for positive output
+        p_pos_score, p_neg_score, p_neut_score, p_assas_score = self._calc_cos_sim(m_pos_expanded, pos_encs, neg_encs, neutral_encs, assas_expanded)
+        p_pos_sim, p_neg_sim = self._calc_final_scores(p_pos_score, p_neg_score, p_neut_score, p_assas_score)
+        
+        p_topic_loss = F.relu((p_neg_sim - p_pos_sim) + self.margin).mean()
+
+        # Calculate search loss
+        s_pos_out, s_neg_out = search_outs
+        loss_positive = F.triplet_margin_loss(m_pos_out, s_pos_out, m_neg_out, margin=0.1)
+        loss_negative = F.triplet_margin_loss(m_neg_out, s_neg_out, m_pos_out, margin=0.7)
+
+        return p_topic_loss + loss_positive + loss_negative
