@@ -88,5 +88,4 @@ def calc_codenames_score(model_out: Tensor, pos_encs: Tensor, neg_encs: Tensor, 
     neg_sum = torch.sum(first_incorrect_value == 2, dim=0)
     neut_sum = torch.sum(first_incorrect_value == 1, dim=0)
 
-    assassin_value = (rewards == 3).nonzero(as_tuple=True)[1]
     return num_correct.float().mean(), neg_sum, neut_sum, assassin_sum

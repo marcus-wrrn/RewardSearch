@@ -1,8 +1,8 @@
 import torch
 from torch.optim.lr_scheduler import ExponentialLR
-from loss_fns.loss import  RewardSearchLoss
+from loss_fns.loss import  RewardSearchLoss, RewardSearchWithWassersteinLoss
 from torch.utils.data import DataLoader
-from models.multi_objective_models import MORSpyMaster, MORSpyWasserstein
+from models.multi_objective_models import MORSpyMaster
 from datasets.dataset import CodeNamesDataset
 import numpy as np
 import datetime
@@ -47,10 +47,10 @@ def validate(model: MORSpyMaster, valid_loader: DataLoader, loss_fn: RewardSearc
         pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings = data[1]
         pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings = pos_embeddings.to(device), neg_embeddings.to(device), neut_embeddings.to(device), assas_embeddings.to(device)
 
-        model_out, search_out, search_max, search_min = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+        model_out, search_out, search_out_max, search_out_min = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
 
         #loss = F.triplet_margin_loss(model_out, search_min, search_max, margin=0.2)
-        loss = loss_fn(model_out, search_max, search_min, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+        loss = loss_fn(model_out, search_out_max, search_out_min, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
         score, results, neut_sum, assas_sum = utils.calc_codenames_score(search_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings, device)
 
         incorrect_guess += results.item()
@@ -62,7 +62,7 @@ def validate(model: MORSpyMaster, valid_loader: DataLoader, loss_fn: RewardSearc
 
     return avg_loss, avg_score, avg_incorrect_guess
 
-def train(n_epochs: int, model: MORSpyMaster, train_loader: DataLoader, valid_dataloader: DataLoader, device: torch.device, model_path: str, normalize_reward: bool):
+def train(n_epochs: int, model: MORSpyMaster, train_loader: DataLoader, valid_dataloader: DataLoader, device: torch.device, model_path: str, normalize_reward: bool, use_model_out: bool):
     loss_fn, optimizer, scheduler = init_hyperparameters(model, device, normalize_reward)
     print("Training")
     model.train()
@@ -90,12 +90,17 @@ def train(n_epochs: int, model: MORSpyMaster, train_loader: DataLoader, valid_da
             assas_embeddings = assas_embeddings.to(device)
             
             optimizer.zero_grad()
-            model_out, search_out, search_max, search_min = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+            model_out, search_out, search_out_max, search_out_min = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
 
-            loss = loss_fn(model_out, search_max, search_min, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
-            score, neg_sum, neut_sum, assas_sum = utils.calc_codenames_score(search_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings, device)
+            loss = loss_fn(model_out, search_out_max, search_out_min, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
             
+            score_input = search_out
+            
+            if use_model_out:
+                score_input = model_out
 
+            score, neg_sum, neut_sum, assas_sum = utils.calc_codenames_score(score_input, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings, device)
+            
             negative_sum += neg_sum.item()
             neutral_sum += neut_sum.item()
             assassin_sum += assas_sum.item()
@@ -133,6 +138,7 @@ def main(args):
     loss_out = args.loss_out
     vocab_size = args.vocab
 
+    use_model_output = utils.convert_args_str_to_bool(args.use_model_out)
     search_pruning = utils.convert_args_str_to_bool(args.prune_search)
     normalize_reward = utils.convert_args_str_to_bool(args.norm)
 
@@ -147,7 +153,7 @@ def main(args):
     model = MORSpyMaster(vector_db, device, vocab_size=vocab_size, search_pruning=search_pruning)
     model.to(device)
 
-    losses_train, losses_valid = train(n_epochs=args.e, model=model, train_loader=train_dataloader, valid_dataloader=valid_dataloader, device=device, model_path=model_out, normalize_reward=normalize_reward)
+    losses_train, losses_valid = train(n_epochs=args.e, model=model, train_loader=train_dataloader, valid_dataloader=valid_dataloader, device=device, model_path=model_out, normalize_reward=normalize_reward, use_model_out=use_model_output)
     utils.save_loss_plot(losses_train, losses_valid, save_path=loss_out)
 
 if __name__ == "__main__":
@@ -158,7 +164,8 @@ if __name__ == "__main__":
     parser.add_argument('-guess_data', type=str, help="Geuss words dataset path", default=BASE_DIR + "data/codewords_full_w_assassin_valid.json")
     parser.add_argument('-vocab', type=int, default=80)
     parser.add_argument('-weight_decay', type=float, default=0.1)
-    parser.add_argument('-prune_search', type=str, help="Prunes the search window based on average similarity [Y/n]", default='Y')
+    parser.add_argument('-prune_search', type=str, help="Prunes the search window based on average similarity [Y/n]", default='N')
+    parser.add_argument('-use_model_out', type=str, help="Determines whether to use the model output for scoring or the search output (highest scoring word embedding) [Y/n]", default='N')
     parser.add_argument('-gamma', type=float, default=0.9)
     parser.add_argument('-norm', type=str, help="Whether to normalize reward function, [Y/n]", default='Y')
     parser.add_argument('-val_guess_data', type=str, help="Filepath for the validation dataset", default=BASE_DIR + "data/codewords_full_w_assassin_mini.json")
