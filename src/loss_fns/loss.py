@@ -40,7 +40,7 @@ class CombinedTripletLoss(nn.Module):
 
 class TripletMeanLossL2Distance(CombinedTripletLoss):
     """
-    Performs worse than CombinedTripletLoss, potentially due to MPNET being finetuned on cossine similarity not distance
+    Performs worse than CombinedTripletLoss, potentially due to MPNET being finetuned on cosine similarity not distance
 
     Interestingly loss seems about the same, even though it tests slightly lower
     More testing is required
@@ -293,7 +293,7 @@ class RewardSearchWithWassersteinLoss(RewardSearchLoss):
 
         return loss_model + wasserstein_rot.mean()
     
-class RewardSearchWithDualHead(RewardSearchLoss):
+class KeypointTriangulationLoss(RewardSearchLoss):
     def __init__(self, model_marg=0.2, search_marg=0.7, device='cpu', normalize=True, exp_score=False):
         super().__init__(model_marg, search_marg, device, normalize, exp_score)
     
@@ -311,7 +311,7 @@ class RewardSearchWithDualHead(RewardSearchLoss):
         
         p_topic_loss = F.relu((p_neg_sim - p_pos_sim) + self.margin).mean()
 
-        # Calculate search loss
+        # Calculate triplet loss between 4 points
         s_pos_out, s_neg_out = search_outs
         loss_positive = F.triplet_margin_loss(m_pos_out, s_pos_out, m_neg_out, margin=0.1)
         loss_negative = F.triplet_margin_loss(m_neg_out, s_neg_out, m_pos_out, margin=0.7)

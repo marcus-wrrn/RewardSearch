@@ -227,7 +227,6 @@ class MORSpyDualHead(MORSpyMaster):
 
         tot_reward = self._get_total_reward(word_embs_expanded, pos_encs, neg_encs, neut_encs, assas_encs, reverse=reverse)
 
-
         return self._find_scored_embeddings(tot_reward, word_embeddings)
 
     def forward(self, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assas_emb: Tensor) -> MOROutObj | tuple:
