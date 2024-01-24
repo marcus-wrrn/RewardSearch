@@ -1,68 +1,40 @@
 import torch
 from torch.optim.lr_scheduler import ExponentialLR
-from loss_fns.loss import  RewardSearchLoss, RewardSearchWithWassersteinLoss
+from loss_fns.loss import  RewardSearchLoss, KeypointTriangulationLoss
 from torch.utils.data import DataLoader
-from models.multi_objective_models import MORSpyMaster
+from models.multi_objective_models import MORSpyDualHead
 from datasets.dataset import CodeNamesDataset
 import numpy as np
 import datetime
 import argparse
 import utils.utilities as utils
+
 from utils.vector_search import VectorSearch
 from utils.hidden_vars import BASE_DIR
-import utils.utilities as utils
-import torch.nn.functional as F
+from utils.logger import EpochLogger
 
-def init_hyperparameters(model: MORSpyMaster, device, normalize_reward):
-    loss_fn = RewardSearchLoss(model_marg=0.7, search_marg=0.8, device=device, normalize=normalize_reward)
+def init_hyperparameters(model: MORSpyDualHead, device, normalize_reward):
+    loss_fn = KeypointTriangulationLoss(model_marg=0.7, search_marg=0.8, device=device, normalize=normalize_reward)
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.00001, weight_decay=0.1)
     scheduler = ExponentialLR(optimizer, gamma=0.9)
     return loss_fn, optimizer, scheduler
 
-class LossResults:
-    def __init__(self, data_size: int) -> None:
-        self.tot_pos = 0.0
-        self.tot_neg = 0.0
-        self.tot_neut = 0.0
-        self.size = data_size
-    
-    def add_results(self, results: tuple):
-        assert len(results) == 3
-        pos, neg, neut = results
-
-        self.tot_pos += pos.mean(0).item()
-        self.tot_neg += neg.mean(0).item()
-        self.tot_neut += neut.mean(0).item()
-    
-    @property
-    def results_str(self) -> str:
-        return f"Positive: {self.tot_pos/self.size}, Negative: {self.tot_neg/self.size}, Neutral: {self.tot_neut/self.size}"
-
 @torch.no_grad()
-def validate(model: MORSpyMaster, valid_loader: DataLoader, loss_fn: RewardSearchLoss, device: torch.device):
-    total_loss = 0.0
-    total_score = 0.0
-    incorrect_guess = 0.0
+def validate(model: MORSpyDualHead, valid_loader: DataLoader, loss_fn: RewardSearchLoss, device: torch.device):
+    val_logger = EpochLogger(len(valid_loader.dataset), len(valid_loader), device, "Validation")
     for i, data in enumerate(valid_loader, 0):
         pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings = data[1]
         pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings = pos_embeddings.to(device), neg_embeddings.to(device), neut_embeddings.to(device), assas_embeddings.to(device)
 
-        model_out, search_out, search_out_max, search_out_min = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+        model_logits, search_logits, word_emb_output = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
 
-        #loss = F.triplet_margin_loss(model_out, search_min, search_max, margin=0.2)
-        loss = loss_fn(model_out, search_out_max, search_out_min, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
-        score, results, neut_sum, assas_sum = utils.calc_codenames_score(search_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings, device)
+        loss = loss_fn(model_logits, search_logits, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+        val_logger.update_results(word_emb_output, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+        val_logger.update_loss(loss)
 
-        incorrect_guess += results.item()
-        total_loss += loss.item()
-        total_score += score.item()
-    avg_loss = total_loss / len(valid_loader)
-    avg_score = total_score / len(valid_loader)
-    avg_incorrect_guess = incorrect_guess / len(valid_loader)
+    return val_logger
 
-    return avg_loss, avg_score, avg_incorrect_guess
-
-def train(n_epochs: int, model: MORSpyMaster, train_loader: DataLoader, valid_dataloader: DataLoader, device: torch.device, model_path: str, normalize_reward: bool, use_model_out: bool):
+def train(n_epochs: int, model: MORSpyDualHead, train_loader: DataLoader, valid_dataloader: DataLoader, device: torch.device, model_path: str, normalize_reward: bool, use_model_out: bool):
     loss_fn, optimizer, scheduler = init_hyperparameters(model, device, normalize_reward)
     print("Training")
     model.train()
@@ -73,16 +45,13 @@ def train(n_epochs: int, model: MORSpyMaster, train_loader: DataLoader, valid_da
     print(f"Starting training at: {datetime.datetime.now()}")
     for epoch in range(1, n_epochs + 1):
         print(f"Epoch: {epoch}")
-        loss_train = 0.0
-        num_correct = 0.0
-
-        negative_sum = 0.0
-        neutral_sum = 0.0
-        assassin_sum = 0.0
+        train_logger_search = EpochLogger(len(train_loader.dataset), len(train_loader), device, name="Training with Search Output")
+        train_logger_model = EpochLogger(len(train_loader.dataset), len(train_loader), device, name="Training with Model Output")
         for i, data in enumerate(train_loader, 0):
             if (i % 100 == 0):
                 print(f"{datetime.datetime.now()}: Iteration: {i}/{len(train_loader)}")
             pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings = data[1]
+
             # Put embeddings on device
             pos_embeddings = pos_embeddings.to(device)
             neg_embeddings = neg_embeddings.to(device)
@@ -90,39 +59,30 @@ def train(n_epochs: int, model: MORSpyMaster, train_loader: DataLoader, valid_da
             assas_embeddings = assas_embeddings.to(device)
             
             optimizer.zero_grad()
-            model_out, search_out, search_out_max, search_out_min = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+            model_logits, search_logits, word_emb_output = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
 
-            loss = loss_fn(model_out, search_out_max, search_out_min, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
-            
-            score_input = search_out
-            
-            if use_model_out:
-                score_input = model_out
+            loss = loss_fn(model_logits, search_logits, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
 
-            score, neg_sum, neut_sum, assas_sum = utils.calc_codenames_score(score_input, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings, device)
+            train_logger_search.update_results(word_emb_output, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+            # Currently looks at the positive output, use index 1 to look at negative output
+            train_logger_model.update_results(model_logits[0], pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
             
-            negative_sum += neg_sum.item()
-            neutral_sum += neut_sum.item()
-            assassin_sum += assas_sum.item()
-            num_correct += score.item()
-
             loss.backward()
             optimizer.step()
-            loss_train += loss.item()
-            
+            train_logger_search.update_loss(loss)
+            train_logger_model.update_loss(loss)
+    
         scheduler.step()
-        avg_loss = loss_train / len(train_loader)
-        avg_score = num_correct / len(train_loader) # technically average of average scores
-        avg_incorrect_guess = negative_sum 
-        losses_train.append(avg_loss)
+        losses_train.append(train_logger_search.avg_loss)
+        train_logger_search.print_log()
+        train_logger_model.print_log()
+
         # Validate model output
-        validation_loss, validation_score, validation_answers = validate(model, valid_dataloader, loss_fn, device)
-        losses_valid.append(validation_loss)
-        # Log and print save model parameters
-        training_str = f"{datetime.datetime.now()}, Epoch: {epoch}\nTraining Loss: {avg_loss}, Training Score: {avg_score}\nValidation Loss: {validation_loss}, Validation Score: {validation_score}\n"
-        training_str += f"Neutral Value Train: {neutral_sum}, Assasin Value Train: {assassin_sum}\n"        
-        training_str += f"Negative Value Train: {avg_incorrect_guess}, Validation: {validation_answers}"
-        print(training_str)
+        validation_logger = validate(model, valid_dataloader, loss_fn, device)
+        
+        validation_logger.print_log()
+        losses_valid.append(validation_logger.avg_loss)
+        
         if len(losses_train) == 1 or losses_train[-1] < losses_train[-2]:
             torch.save(model.state_dict(), model_path)
         
@@ -150,7 +110,7 @@ def main(args):
     valid_dataloader = DataLoader(valid_dataset, batch_size=50, num_workers=4)
 
     vector_db = VectorSearch(train_dataset, prune=True)
-    model = MORSpyMaster(vector_db, device, vocab_size=vocab_size, search_pruning=search_pruning)
+    model = MORSpyDualHead(vector_db, device, vocab_size=vocab_size, search_pruning=search_pruning)
     model.to(device)
 
     losses_train, losses_valid = train(n_epochs=args.e, model=model, train_loader=train_dataloader, valid_dataloader=valid_dataloader, device=device, model_path=model_out, normalize_reward=normalize_reward, use_model_out=use_model_output)
