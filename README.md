@@ -26,4 +26,4 @@ Currently the models best implementation can guess a word that on average result
    
 I am still experimenting with the model and tweaking the loss function so I will have more detailed results posted soon. However, it should be noted that these results already show better performance than a person (typically only getting about 2-3/9 target words correct on the first turn) and the neutral vs. negative word selection rate shows that the current loss function `KeypointTriangulationLoss` is capable of handling multiple objectives in a similarity search related context.
 
-Please note that this work is planned to be part of a much larger research project, to be presented alongside an official paper. If you use any of the following work in a public manner, I simply ask that you cite this github repository directly or to Marcus Warren. Thank you.  
+Please note that this work is planned to be part of a much larger research project, to be presented alongside an official paper. If you wish to use any of the following work in a public manner, I simply ask that you cite this github repository directly or to Marcus Warren. Thank you.  
