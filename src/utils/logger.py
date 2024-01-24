@@ -38,7 +38,7 @@ class EpochLogger:
         out_str = f"{self.name} Log\n"
         out_str += f"Loss: {self.avg_loss}, Total Score: {self.avg_correct}\n"
         out_str += f"Neutral Guesses: {self.neut_sum}/{self.data_size}, Negative Guesses: {self.neg_sum}/{self.data_size}\n"        
-        out_str += f"Assassin Guesses: {self.assas_sum}/{self.data_size}"
+        out_str += f"Assassin Guesses: {self.assas_sum}/{self.data_size}\n"
         return out_str
     
     def print_log(self):
