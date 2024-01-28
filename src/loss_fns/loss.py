@@ -39,17 +39,6 @@ class CombinedTripletLoss(nn.Module):
         return F.relu(loss).mean()
 
 class TripletMeanLossL2Distance(CombinedTripletLoss):
-    """
-    Performs worse than CombinedTripletLoss, potentially due to MPNET being finetuned on cosine similarity not distance
-
-    Interestingly loss seems about the same, even though it tests slightly lower
-    More testing is required
-
-    It could also be due to the fact that the outputs are normalized and thus all have the same magnitude (exist on hypersphere) which is accounted for by just looking at the angle but leads to 
-    information loss when only comparing distance
-
-    latent space is organized based on rotation not distance
-    """
     def __init__(self, margin=1.0):
         super(TripletMeanLossL2Distance, self).__init__(margin)
 
@@ -299,12 +288,10 @@ class KeypointTriangulationLoss(RewardSearchLoss):
     
     def forward(self, model_out: tuple[Tensor, Tensor], search_outs: tuple[Tensor, Tensor], pos_encs: Tensor, neg_encs: Tensor, neutral_encs: Tensor, assas_encs: Tensor):
         m_pos_out, m_neg_out = model_out
-        # # Mean pool positive and negative output to find topic output
-        # topic_out = torch.cat((m_pos_expanded, m_neg_expanded), dim=1)
-        # topic_out = torch.mean(topic_out, dim=1, keepdim=True)
-        
+
         assas_expanded = assas_encs.unsqueeze(1)
         m_pos_expanded = m_pos_out.unsqueeze(1)
+        
         # Calculate topic loss for positive output
         p_pos_score, p_neg_score, p_neut_score, p_assas_score = self._calc_cos_sim(m_pos_expanded, pos_encs, neg_encs, neutral_encs, assas_expanded)
         p_pos_sim, p_neg_sim = self._calc_final_scores(p_pos_score, p_neg_score, p_neut_score, p_assas_score)
@@ -317,3 +304,4 @@ class KeypointTriangulationLoss(RewardSearchLoss):
         loss_negative = F.triplet_margin_loss(m_neg_out, s_neg_out, m_pos_out, margin=0.7)
 
         return p_topic_loss + loss_positive + loss_negative
+    
