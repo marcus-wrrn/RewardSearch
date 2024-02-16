@@ -33,11 +33,11 @@ class MORSpyMaster(nn.Module):
         
         self.fc = nn.Sequential(
             nn.Linear(3072, 2304),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(2304, 1700),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(1700, 1000),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(1000, 768),
         )
         self.vocab = vocab
@@ -193,11 +193,11 @@ class MORSpyDualHead(MORSpyMaster):
 
         self.fc = nn.Sequential(
             nn.Linear(3072, 2304),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(2304, 1700),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(1700, 1000),
-            nn.ReLU(),
+            nn.Tanh(),
         )
 
         self.pos_layer = nn.Linear(1000, 768)
