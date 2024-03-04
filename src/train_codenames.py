@@ -96,6 +96,9 @@ def train(n_epochs: int, model: MORSpyMaster, train_loader: DataLoader, valid_da
             train_logger_model.update_results(model_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
             train_logger_search.update_results(search_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
 
+
+            train_logger_model.update_loss(loss)
+            train_logger_search.update_loss(loss)
             loss.backward()
             optimizer.step()
             
@@ -126,6 +129,10 @@ def main(args):
     loss_out = args.loss_out
     vocab_size = args.vocab
 
+    neut_weight = args.neut_weight
+    neg_weight = args.neg_weight
+    assas_weight = args.assas_weight
+
     use_model_output = utils.convert_args_str_to_bool(args.use_model_out)
     search_pruning = utils.convert_args_str_to_bool(args.prune_search)
     normalize_reward = utils.convert_args_str_to_bool(args.norm)
@@ -138,7 +145,7 @@ def main(args):
     valid_dataloader = DataLoader(valid_dataset, batch_size=50, num_workers=4)
 
     vector_db = VectorSearch(train_dataset, prune=True)
-    model = MORSpyMaster(vector_db, device, vocab_size=vocab_size, search_pruning=search_pruning)
+    model = MORSpyMaster(vector_db, device, neutral_weight=neut_weight, negative_weight=neg_weight, assas_weights=assas_weight, vocab_size=vocab_size, search_pruning=search_pruning)
     model.to(device)
 
     losses_train, losses_valid = train(n_epochs=args.e, model=model, train_loader=train_dataloader, valid_dataloader=valid_dataloader, device=device, model_path=model_out, normalize_reward=normalize_reward, use_model_out=use_model_output)
@@ -155,6 +162,9 @@ if __name__ == "__main__":
     parser.add_argument('-prune_search', type=str, help="Prunes the search window based on average similarity [Y/n]", default='N')
     parser.add_argument('-use_model_out', type=str, help="Determines whether to use the model output for scoring or the search output (highest scoring word embedding) [Y/n]", default='N')
     parser.add_argument('-gamma', type=float, default=0.9)
+    parser.add_argument('-neut_weight', type=float, default=1.0)
+    parser.add_argument('-neg_weight', type=float, default=0.0)
+    parser.add_argument('-assas_weight', type=float, default=-10.0)
     parser.add_argument('-norm', type=str, help="Whether to normalize reward function, [Y/n]", default='Y')
     parser.add_argument('-val_guess_data', type=str, help="Filepath for the validation dataset", default=BASE_DIR + "data/codewords_full_w_assassin_mini.json")
     parser.add_argument('-model_out', type=str, default=BASE_DIR + "test.pth")

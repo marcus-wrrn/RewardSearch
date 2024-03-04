@@ -7,6 +7,7 @@ import argparse
 import numpy as np
 from utils.vector_search import VectorSearch
 import utils.utilities as utils
+from utils.logger import TestLogger
 
 def calc_cos_score(anchor, pos_encs, neg_encs):
     anchor = anchor.unsqueeze(1)
@@ -38,24 +39,13 @@ def print_results(sentences: tuple, words, tot_score: float, neg_score, neut_sco
     print(f"Assassin Score: {assas_score}/{num_sents}")
     print(f"Total Score: {tot_score}/9")
     print()
-    # for i in range(num_sents):
-    #     print(f"Target Words: {pos_sents[i]}")
-    #     print(f"Negative Words: {neg_sents[i]}")
-    #     print(f"Neutral Words: {neutral_sents[i]}")
-    #     print(f"Assassin Words: {assas_word[i]}")
-    #     print(f"\n{words[i][0]}")
-    #     print()
-    
 
 @torch.no_grad()
-def test_loop(model: MORSpyMaster, dataloader, device: torch.device, verbose=False, use_model_out=False):
-
-    total_score = 0
-    num_negative = 0
-    num_neutral = 0
-    num_assassin = 0
+def test_loop(model: MORSpyMaster, dataloader: DataLoader, device: torch.device, verbose=False, use_model_out=False):
 
     model.eval()
+    logger_model = TestLogger(len(dataloader.dataset), len(dataloader), device, name="Testing Model Output")
+    logger_search = TestLogger(len(dataloader.dataset), len(dataloader), device, name="Testing Search Output")
     for i, data in enumerate(dataloader):
         pos_sents, neg_sents, neutral_sents, assasin_word = data[0]
         pos_embs, neg_embs, neut_embs, assas_embs = data[1]
@@ -66,25 +56,14 @@ def test_loop(model: MORSpyMaster, dataloader, device: torch.device, verbose=Fal
         assas_embs = assas_embs.to(device)
 
         model_obj = model(pos_embs, neg_embs, neut_embs, assas_embs)
+
+        logger_model.update_results(model_obj.words, model_obj.model_out, pos_embs, neg_embs, neut_embs, assas_embs)
+        logger_search.update_results(model_obj.words, model_obj.search_out, pos_embs, neg_embs, neut_embs, assas_embs)
         
-        # pos_score, neg_score = calc_cos_score(model_obj.search_out_max, pos_embs, neg_embs)
+    logger_model.print_log()
+    logger_search.print_log()
 
-        # Max search output
-        num_correct, neg_sum, neut_sum, assas_sum = utils.calc_codenames_score(model_obj.search_out if not use_model_out else model_obj.model_out, pos_embs, neg_embs, neut_embs, assas_embs, device)
-
-        
-        if verbose: 
-            print_results(data[0], model_obj.words, num_correct, neg_sum, neut_sum, assas_sum)
-            #print(f"Score: {num_correct}/{len(pos_embs[0])}")
-        total_score += num_correct
-        num_negative += neg_sum
-        num_neutral += neut_sum
-        num_assassin += assas_sum
-
-    print(f"Average Score: {total_score/len(dataloader)}")
-    print(f"Num Neutral: {num_neutral}")
-    print(f"Num Negative: {num_negative}")
-    print(f"Num Assassin: {num_assassin}")
+    logger_search.print_word_distribution()
         
 def main(args):
     device = utils.get_device(args.cuda)
@@ -106,11 +85,11 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-code_dir', type=str, help='Dataset Path', default="/home/marcuswrrn/Projects/Machine_Learning/NLP/codenames/data/words.json")
-    parser.add_argument('-guess_dir', type=str, help="", default="/home/marcuswrrn/Projects/Machine_Learning/NLP/codenames/data/codewords_full_w_assassin_mini.json")
-    parser.add_argument('-m', type=str, help='Model Path', default="/home/marcuswrrn/Projects/Machine_Learning/NLP/codenames/codenames.pth")
+    parser.add_argument('-code_dir', type=str, help='Dataset Path', default="/home/marcuswrrn/Projects/Machine_Learning/NLP/Codenames/data/words_extended.json")
+    parser.add_argument('-guess_dir', type=str, help="", default="/home/marcuswrrn/Projects/Machine_Learning/NLP/Codenames/data/codewords_full_w_assassin_mini.json")
+    parser.add_argument('-m', type=str, help='Model Path', default="/home/marcuswrrn/Projects/Machine_Learning/NLP/Codenames/eval_model.pth")
     parser.add_argument('-use_model_out', type=str, help="Whether to use model output or search output, use Y or N", default='N')
-    parser.add_argument('-sw', type=int, help='Model search window', default=2)
+    parser.add_argument('-sw', type=int, help='Model search window', default=80)
     parser.add_argument('-b', type=int, help='Batch Size', default=200)
     parser.add_argument('-cuda', type=str, help="Whether to use CPU or Cuda, use Y or N", default='Y')
     parser.add_argument('-v', type=str, help="Verbose [y/N]", default='Y')
