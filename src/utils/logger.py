@@ -1,15 +1,18 @@
 from torch import Tensor
 from utils.utilities import calc_codenames_score
 from collections import Counter
+from models.multi_objective_models import MORSpyMaster
 import json
 import os
 
 class EpochLogger:
-    def __init__(self, data_size: int, batch_size: int, device='cpu', name="Training"):
+    def __init__(self, data_size: int, batch_size: int, num_targets=9, device='cpu', name="Training"):
         self.name = name
         self.total_loss = 0.0
 
         self.num_correct = 0
+        self.num_targets = num_targets
+
         self.neut_sum = 0
         self.neg_sum = 0
         self.assas_sum = 0
@@ -55,7 +58,7 @@ class EpochLogger:
 
 
 class TrainLogger:
-    def __init__(self) -> None:
+    def __init__(self, num_epochs: int) -> None:
         self.train_loggers_model = []
         self.train_loggers_search = []
 
@@ -68,7 +71,7 @@ class TrainLogger:
         self.valid_loggers_model.append(vmodel_log)
         self.valid_loggers_search.append(vsearch_log)
 
-    def _combine_loggers(self, loggers: list[EpochLogger]) -> json:
+    def _combine_loggers(self, loggers: list[EpochLogger]):
         loss = []
         targ_rate = []
         num_targets = []
@@ -79,14 +82,15 @@ class TrainLogger:
         for logger in loggers:
             loss.append(logger.avg_loss)
 
-            targ_rate.append(logger.avg_correct / logger.data_size)
+            targ_rate.append(logger.avg_correct / logger.num_targets)
             num_targets.append(logger.avg_correct)
             neut_rate.append(logger.neut_sum / logger.data_size)
             neg_rate.append(logger.neg_sum / logger.data_size)
             assas_rate.append(logger.assas_sum / logger.data_size)
         
-        obj = {"Targets": num_targets, "Target Rate": targ_rate, "Neutral Rate": neut_rate, "Negative Rate": neg_rate, "Assassin Rate": assas_rate}
-        return json(obj)
+        # TODO: Fix scuffed name 
+        obj = {"Name": loggers[0].name, "Targets": num_targets, "Target Rate": targ_rate, "Neutral Rate": neut_rate, "Negative Rate": neg_rate, "Assassin Rate": assas_rate}
+        return obj
 
     def save_results(self, directory: str):
         # Create directory if it does not exist
@@ -113,6 +117,7 @@ class TrainLogger:
         obj = {"Model": valid_model, "Search": valid_search}
         with open(valid_path, 'w') as file:
             json.dump(obj, file)
+        
 
 
     
