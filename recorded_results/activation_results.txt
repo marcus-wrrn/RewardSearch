@@ -1,0 +1,742 @@
+Keypoint Triangulation Loss, using different activation methods
+
+
+(.venv) marcuswrrn@marcus:~/Projects/Machine_Learning/NLP/Codenames$ python3 ./src/train_dual_head.py -e 10 -b 500 -model_out "dual_head_experiment_asymetric_marg_tanh_last_layer.pth" -loss_out "dual_head_experiment_asymetric_marg_tanh_last_layer.png" -cuda Y -norm Y -code_data "./data/words_extended.json"
+Device: cuda
+Training Length: 100000
+Training
+Starting training at: 2024-02-15 17:35:06.708402
+Epoch: 1
+2024-02-15 17:35:08.069909: Iteration: 0/200
+2024-02-15 17:35:54.001518: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.7476619130373001, Total Score: 2.884020130634308
+Neutral Guesses: 75327/100000, Negative Guesses: 24673/100000
+Assassin Guesses: 0/100000
+
+Training with Model Output Log
+Loss: 0.7476619130373001, Total Score: 0.5547700265049934
+Neutral Guesses: 37653/100000, Negative Guesses: 56259/100000
+Assassin Guesses: 6088/100000
+
+Validation Log
+Loss: 0.6976064842939377, Total Score: 2.8368999338150025
+Neutral Guesses: 7484/10000, Negative Guesses: 2516/10000
+Assassin Guesses: 0/10000
+
+Epoch: 2
+2024-02-15 17:36:58.577583: Iteration: 0/200
+2024-02-15 17:37:49.726596: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.6755009508132934, Total Score: 3.178980141878128
+Neutral Guesses: 73776/100000, Negative Guesses: 26224/100000
+Assassin Guesses: 0/100000
+
+Training with Model Output Log
+Loss: 0.6755009508132934, Total Score: 1.116200053691864
+Neutral Guesses: 36642/100000, Negative Guesses: 59157/100000
+Assassin Guesses: 4201/100000
+
+Validation Log
+Loss: 0.5817577114701271, Total Score: 4.315599899291993
+Neutral Guesses: 6967/10000, Negative Guesses: 3033/10000
+Assassin Guesses: 0/10000
+
+Epoch: 3
+2024-02-15 17:38:58.076091: Iteration: 0/200
+2024-02-15 17:39:52.274344: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.5297420826554299, Total Score: 4.760800240039825
+Neutral Guesses: 70488/100000, Negative Guesses: 29505/100000
+Assassin Guesses: 7/100000
+
+Training with Model Output Log
+Loss: 0.5297420826554299, Total Score: 4.55515020608902
+Neutral Guesses: 34083/100000, Negative Guesses: 63072/100000
+Assassin Guesses: 2845/100000
+
+Validation Log
+Loss: 0.49310559704899787, Total Score: 5.0793998908996585
+Neutral Guesses: 7117/10000, Negative Guesses: 2883/10000
+Assassin Guesses: 0/10000
+
+Epoch: 4
+2024-02-15 17:41:03.959203: Iteration: 0/200
+2024-02-15 17:41:58.874097: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.4720998153090477, Total Score: 5.199690248966217
+Neutral Guesses: 71508/100000, Negative Guesses: 28489/100000
+Assassin Guesses: 3/100000
+
+Training with Model Output Log
+Loss: 0.4720998153090477, Total Score: 6.554030311107636
+Neutral Guesses: 34408/100000, Negative Guesses: 62295/100000
+Assassin Guesses: 3297/100000
+
+Validation Log
+Loss: 0.45445793733000756, Total Score: 5.313399877548218
+Neutral Guesses: 7154/10000, Negative Guesses: 2846/10000
+Assassin Guesses: 0/10000
+
+Epoch: 5
+2024-02-15 17:43:07.839880: Iteration: 0/200
+2024-02-15 17:44:04.187816: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.4424698865413666, Total Score: 5.35687023639679
+Neutral Guesses: 72085/100000, Negative Guesses: 27913/100000
+Assassin Guesses: 2/100000
+
+Training with Model Output Log
+Loss: 0.4424698865413666, Total Score: 7.407980351448059
+Neutral Guesses: 34903/100000, Negative Guesses: 61407/100000
+Assassin Guesses: 3690/100000
+
+Validation Log
+Loss: 0.4319698420166969, Total Score: 5.413499891757965
+Neutral Guesses: 7163/10000, Negative Guesses: 2837/10000
+Assassin Guesses: 0/10000
+
+Epoch: 6
+2024-02-15 17:45:15.400068: Iteration: 0/200
+2024-02-15 17:46:12.270333: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.4241787660121918, Total Score: 5.428660271167755
+Neutral Guesses: 72334/100000, Negative Guesses: 27664/100000
+Assassin Guesses: 2/100000
+
+Training with Model Output Log
+Loss: 0.4241787660121918, Total Score: 7.8452303647995
+Neutral Guesses: 35257/100000, Negative Guesses: 60718/100000
+Assassin Guesses: 4025/100000
+
+Validation Log
+Loss: 0.4171890549361706, Total Score: 5.458599894046784
+Neutral Guesses: 7255/10000, Negative Guesses: 2745/10000
+Assassin Guesses: 0/10000
+
+Epoch: 7
+2024-02-15 17:47:23.982650: Iteration: 0/200
+2024-02-15 17:48:20.909665: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.41170434579253196, Total Score: 5.475630266666412
+Neutral Guesses: 72430/100000, Negative Guesses: 27568/100000
+Assassin Guesses: 2/100000
+
+Training with Model Output Log
+Loss: 0.41170434579253196, Total Score: 8.099180419445037
+Neutral Guesses: 35538/100000, Negative Guesses: 60247/100000
+Assassin Guesses: 4215/100000
+
+Validation Log
+Loss: 0.40671970665454865, Total Score: 5.492199902534485
+Neutral Guesses: 7275/10000, Negative Guesses: 2725/10000
+Assassin Guesses: 0/10000
+
+Epoch: 8
+2024-02-15 17:49:34.466712: Iteration: 0/200
+2024-02-15 17:50:31.334064: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.40265184089541434, Total Score: 5.501840262413025
+Neutral Guesses: 72662/100000, Negative Guesses: 27336/100000
+Assassin Guesses: 2/100000
+
+Training with Model Output Log
+Loss: 0.40265184089541434, Total Score: 8.260540375709533
+Neutral Guesses: 35731/100000, Negative Guesses: 59863/100000
+Assassin Guesses: 4406/100000
+
+Validation Log
+Loss: 0.39893048837780953, Total Score: 5.506899914741516
+Neutral Guesses: 7313/10000, Negative Guesses: 2687/10000
+Assassin Guesses: 0/10000
+
+Epoch: 9
+2024-02-15 17:51:44.307214: Iteration: 0/200
+2024-02-15 17:52:40.608049: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.3958055038750172, Total Score: 5.519530248641968
+Neutral Guesses: 72797/100000, Negative Guesses: 27201/100000
+Assassin Guesses: 2/100000
+
+Training with Model Output Log
+Loss: 0.3958055038750172, Total Score: 8.370900397300721
+Neutral Guesses: 35795/100000, Negative Guesses: 59667/100000
+Assassin Guesses: 4538/100000
+
+Validation Log
+Loss: 0.39293217957019805, Total Score: 5.522399911880493
+Neutral Guesses: 7281/10000, Negative Guesses: 2719/10000
+Assassin Guesses: 0/10000
+
+Epoch: 10
+2024-02-15 17:53:54.117958: Iteration: 0/200
+2024-02-15 17:54:58.658264: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.3904689145088196, Total Score: 5.5317302680015565
+Neutral Guesses: 72865/100000, Negative Guesses: 27133/100000
+Assassin Guesses: 2/100000
+
+Training with Model Output Log
+Loss: 0.3904689145088196, Total Score: 8.450820384025574
+Neutral Guesses: 35816/100000, Negative Guesses: 59537/100000
+Assassin Guesses: 4647/100000
+
+Validation Log
+Loss: 0.3881903176009655, Total Score: 5.539399893283844
+Neutral Guesses: 7287/10000, Negative Guesses: 2713/10000
+Assassin Guesses: 0/10000
+
+(.venv) marcuswrrn@marcus:~/Projects/Machine_Learning/NLP/Codenames$ python3 ./src/train_dual_head.py -e 10 -b 500 -model_out "dual_head_experiment_asymetric_marg_all_tanh.pth" -loss_out "dual_head_experiment_asymetric_marg_all_tanh.png" -cuda Y -norm Y -code_data "./data/words_extended.json"
+Device: cuda
+Training Length: 100000
+Training
+Starting training at: 2024-02-15 17:57:17.340374
+Epoch: 1
+2024-02-15 17:57:18.627702: Iteration: 0/200
+2024-02-15 17:58:11.862759: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.7369779428839683, Total Score: 3.0843801426887514
+Neutral Guesses: 74456/100000, Negative Guesses: 25544/100000
+Assassin Guesses: 0/100000
+
+Training with Model Output Log
+Loss: 0.7369779428839683, Total Score: 0.566080026626587
+Neutral Guesses: 37161/100000, Negative Guesses: 56984/100000
+Assassin Guesses: 5855/100000
+
+Validation Log
+Loss: 0.6967051839828491, Total Score: 3.1807999193668364
+Neutral Guesses: 7476/10000, Negative Guesses: 2524/10000
+Assassin Guesses: 0/10000
+
+Epoch: 2
+2024-02-15 17:59:20.334680: Iteration: 0/200
+2024-02-15 18:00:13.034194: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.6880127671360969, Total Score: 3.296860156059265
+Neutral Guesses: 73628/100000, Negative Guesses: 26372/100000
+Assassin Guesses: 0/100000
+
+Training with Model Output Log
+Loss: 0.6880127671360969, Total Score: 0.8986400440335274
+Neutral Guesses: 36823/100000, Negative Guesses: 59021/100000
+Assassin Guesses: 4156/100000
+
+Validation Log
+Loss: 0.6278976941108704, Total Score: 4.1696998882293705
+Neutral Guesses: 7040/10000, Negative Guesses: 2960/10000
+Assassin Guesses: 0/10000
+
+Epoch: 3
+2024-02-15 18:01:23.035278: Iteration: 0/200
+2024-02-15 18:02:18.820785: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.539627029299736, Total Score: 4.799750235080719
+Neutral Guesses: 70310/100000, Negative Guesses: 29687/100000
+Assassin Guesses: 3/100000
+
+Training with Model Output Log
+Loss: 0.539627029299736, Total Score: 4.717000218629837
+Neutral Guesses: 33470/100000, Negative Guesses: 64517/100000
+Assassin Guesses: 2013/100000
+
+Validation Log
+Loss: 0.4911470916867256, Total Score: 5.11629989862442
+Neutral Guesses: 7096/10000, Negative Guesses: 2904/10000
+Assassin Guesses: 0/10000
+
+Epoch: 4
+2024-02-15 18:03:32.707215: Iteration: 0/200
+2024-02-15 18:04:29.563898: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.4669009594619274, Total Score: 5.242060232162475
+Neutral Guesses: 71635/100000, Negative Guesses: 28363/100000
+Assassin Guesses: 2/100000
+
+Training with Model Output Log
+Loss: 0.4669009594619274, Total Score: 6.7712503218650815
+Neutral Guesses: 33932/100000, Negative Guesses: 63052/100000
+Assassin Guesses: 3016/100000
+
+Validation Log
+Loss: 0.4467973570525646, Total Score: 5.3418998885154725
+Neutral Guesses: 7179/10000, Negative Guesses: 2821/10000
+Assassin Guesses: 0/10000
+
+Epoch: 5
+2024-02-15 18:05:41.228934: Iteration: 0/200
+2024-02-15 18:06:38.900063: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.4336564439535141, Total Score: 5.3884902811050415
+Neutral Guesses: 72157/100000, Negative Guesses: 27840/100000
+Assassin Guesses: 3/100000
+
+Training with Model Output Log
+Loss: 0.4336564439535141, Total Score: 7.635480349063873
+Neutral Guesses: 34476/100000, Negative Guesses: 61931/100000
+Assassin Guesses: 3593/100000
+
+Validation Log
+Loss: 0.42215185329318045, Total Score: 5.437299900054931
+Neutral Guesses: 7292/10000, Negative Guesses: 2708/10000
+Assassin Guesses: 0/10000
+
+Epoch: 6
+2024-02-15 18:07:52.320607: Iteration: 0/200
+2024-02-15 18:08:49.360500: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.41387722954154016, Total Score: 5.462770249843597
+Neutral Guesses: 72433/100000, Negative Guesses: 27564/100000
+Assassin Guesses: 3/100000
+
+Training with Model Output Log
+Loss: 0.41387722954154016, Total Score: 8.05681037902832
+Neutral Guesses: 34982/100000, Negative Guesses: 61034/100000
+Assassin Guesses: 3984/100000
+
+Validation Log
+Loss: 0.40645106077194215, Total Score: 5.4907998895645145
+Neutral Guesses: 7258/10000, Negative Guesses: 2742/10000
+Assassin Guesses: 0/10000
+
+Epoch: 7
+2024-02-15 18:10:02.196555: Iteration: 0/200
+2024-02-15 18:10:58.552463: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.4008000819385052, Total Score: 5.507440264225006
+Neutral Guesses: 72609/100000, Negative Guesses: 27389/100000
+Assassin Guesses: 2/100000
+
+Training with Model Output Log
+Loss: 0.4008000819385052, Total Score: 8.291460418701172
+Neutral Guesses: 35282/100000, Negative Guesses: 60446/100000
+Assassin Guesses: 4272/100000
+
+Validation Log
+Loss: 0.39564463347196577, Total Score: 5.521899881362915
+Neutral Guesses: 7299/10000, Negative Guesses: 2701/10000
+Assassin Guesses: 0/10000
+
+Epoch: 8
+2024-02-15 18:12:11.286883: Iteration: 0/200
+2024-02-15 18:13:08.250811: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.3915772764384747, Total Score: 5.533370261192322
+Neutral Guesses: 72730/100000, Negative Guesses: 27268/100000
+Assassin Guesses: 2/100000
+
+Training with Model Output Log
+Loss: 0.3915772764384747, Total Score: 8.43317042350769
+Neutral Guesses: 35469/100000, Negative Guesses: 60039/100000
+Assassin Guesses: 4492/100000
+
+Validation Log
+Loss: 0.3878095881640911, Total Score: 5.539799892902375
+Neutral Guesses: 7356/10000, Negative Guesses: 2644/10000
+Assassin Guesses: 0/10000
+
+Epoch: 9
+2024-02-15 18:14:19.787389: Iteration: 0/200
+2024-02-15 18:15:16.707962: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.3847672738134861, Total Score: 5.550580267906189
+Neutral Guesses: 72891/100000, Negative Guesses: 27107/100000
+Assassin Guesses: 2/100000
+
+Training with Model Output Log
+Loss: 0.3847672738134861, Total Score: 8.527060408592224
+Neutral Guesses: 35661/100000, Negative Guesses: 59683/100000
+Assassin Guesses: 4656/100000
+
+Validation Log
+Loss: 0.3819054426252842, Total Score: 5.552299897670746
+Neutral Guesses: 7354/10000, Negative Guesses: 2646/10000
+Assassin Guesses: 0/10000
+
+Epoch: 10
+2024-02-15 18:16:30.122968: Iteration: 0/200
+2024-02-15 18:17:26.726718: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.3795624661445618, Total Score: 5.562980260848999
+Neutral Guesses: 73010/100000, Negative Guesses: 26988/100000
+Assassin Guesses: 2/100000
+
+Training with Model Output Log
+Loss: 0.3795624661445618, Total Score: 8.591800451278687
+Neutral Guesses: 35786/100000, Negative Guesses: 59452/100000
+Assassin Guesses: 4762/100000
+
+Validation Log
+Loss: 0.3773167897760868, Total Score: 5.56319988489151
+Neutral Guesses: 7330/10000, Negative Guesses: 2670/10000
+Assassin Guesses: 0/10000
+
+(.venv) marcuswrrn@marcus:~/Projects/Machine_Learning/NLP/Codenames$ python3 ./src/train_dual_head.py -e 10 -b 500 -model_out "dual_head_experiment_asymetric_marg_gelu.pth" -loss_out "dual_head_experiment_asymetric_marg_gelu.png" -cuda Y -norm Y -code_data "./data/words_extended.json"
+Device: cuda
+Training Length: 100000
+Training
+Starting training at: 2024-02-15 19:08:58.412555
+Epoch: 1
+2024-02-15 19:08:59.747052: Iteration: 0/200
+2024-02-15 19:09:45.051521: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.7822966611385346, Total Score: 3.017430146932602
+Neutral Guesses: 74418/100000, Negative Guesses: 25582/100000
+Assassin Guesses: 0/100000
+
+Training with Model Output Log
+Loss: 0.7822966611385346, Total Score: 0.5336600276827812
+Neutral Guesses: 37636/100000, Negative Guesses: 56151/100000
+Assassin Guesses: 6213/100000
+
+Validation Log
+Loss: 0.6998306766152382, Total Score: 2.99569993019104
+Neutral Guesses: 7454/10000, Negative Guesses: 2546/10000
+Assassin Guesses: 0/10000
+
+Epoch: 2
+2024-02-15 19:10:41.288962: Iteration: 0/200
+2024-02-15 19:11:28.339079: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.6996002638339996, Total Score: 3.0070801436901093
+Neutral Guesses: 74496/100000, Negative Guesses: 25504/100000
+Assassin Guesses: 0/100000
+
+Training with Model Output Log
+Loss: 0.6996002638339996, Total Score: 0.5474200257658959
+Neutral Guesses: 37828/100000, Negative Guesses: 56138/100000
+Assassin Guesses: 6034/100000
+
+Validation Log
+Loss: 0.6994862470030785, Total Score: 3.0777999186515808
+Neutral Guesses: 7440/10000, Negative Guesses: 2560/10000
+Assassin Guesses: 0/10000
+
+Epoch: 3
+2024-02-15 19:12:32.391330: Iteration: 0/200
+2024-02-15 19:13:23.129395: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.6991146674752236, Total Score: 3.080070139169693
+Neutral Guesses: 74303/100000, Negative Guesses: 25697/100000
+Assassin Guesses: 0/100000
+
+Training with Model Output Log
+Loss: 0.6991146674752236, Total Score: 0.5634200271964073
+Neutral Guesses: 37794/100000, Negative Guesses: 56292/100000
+Assassin Guesses: 5914/100000
+
+Validation Log
+Loss: 0.6989738595485687, Total Score: 3.048999924659729
+Neutral Guesses: 7416/10000, Negative Guesses: 2584/10000
+Assassin Guesses: 0/10000
+
+Epoch: 4
+2024-02-15 19:14:28.773817: Iteration: 0/200
+2024-02-15 19:15:19.962842: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.6983568069338798, Total Score: 3.0700001454353334
+Neutral Guesses: 74219/100000, Negative Guesses: 25781/100000
+Assassin Guesses: 0/100000
+
+Training with Model Output Log
+Loss: 0.6983568069338798, Total Score: 0.5864600290358066
+Neutral Guesses: 37729/100000, Negative Guesses: 56566/100000
+Assassin Guesses: 5705/100000
+
+Validation Log
+Loss: 0.6980405649542809, Total Score: 2.997199921607971
+Neutral Guesses: 7419/10000, Negative Guesses: 2581/10000
+Assassin Guesses: 0/10000
+
+Epoch: 5
+2024-02-15 19:16:24.205788: Iteration: 0/200
+2024-02-15 19:17:16.201493: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.6967062249779701, Total Score: 3.221700142621994
+Neutral Guesses: 73778/100000, Negative Guesses: 26222/100000
+Assassin Guesses: 0/100000
+
+Training with Model Output Log
+Loss: 0.6967062249779701, Total Score: 0.6392100310325622
+Neutral Guesses: 37639/100000, Negative Guesses: 57155/100000
+Assassin Guesses: 5206/100000
+
+Validation Log
+Loss: 0.6952740931510926, Total Score: 3.2929999220371244
+Neutral Guesses: 7395/10000, Negative Guesses: 2605/10000
+Assassin Guesses: 0/10000
+
+Epoch: 6
+2024-02-15 19:18:21.613733: Iteration: 0/200
+2024-02-15 19:19:13.848774: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.6825497797131539, Total Score: 3.377350159883499
+Neutral Guesses: 72941/100000, Negative Guesses: 27059/100000
+Assassin Guesses: 0/100000
+
+Training with Model Output Log
+Loss: 0.6825497797131539, Total Score: 0.8520500403642655
+Neutral Guesses: 37378/100000, Negative Guesses: 58422/100000
+Assassin Guesses: 4200/100000
+
+Validation Log
+Loss: 0.6223658308386802, Total Score: 3.540699920654297
+Neutral Guesses: 6970/10000, Negative Guesses: 3030/10000
+Assassin Guesses: 0/10000
+
+Epoch: 7
+2024-02-15 19:20:19.468220: Iteration: 0/200
+2024-02-15 19:21:10.976822: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.5646464192867279, Total Score: 4.0614902114868165
+Neutral Guesses: 70349/100000, Negative Guesses: 29639/100000
+Assassin Guesses: 12/100000
+
+Training with Model Output Log
+Loss: 0.5646464192867279, Total Score: 2.427020124197006
+Neutral Guesses: 35966/100000, Negative Guesses: 60803/100000
+Assassin Guesses: 3231/100000
+
+Validation Log
+Loss: 0.5202695709466935, Total Score: 4.665199899673462
+Neutral Guesses: 7039/10000, Negative Guesses: 2961/10000
+Assassin Guesses: 0/10000
+
+Epoch: 8
+2024-02-15 19:22:34.063855: Iteration: 0/200
+2024-02-15 19:23:25.171329: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.4977340912818909, Total Score: 4.922370228767395
+Neutral Guesses: 71120/100000, Negative Guesses: 28878/100000
+Assassin Guesses: 2/100000
+
+Training with Model Output Log
+Loss: 0.4977340912818909, Total Score: 5.033630213737488
+Neutral Guesses: 34880/100000, Negative Guesses: 62267/100000
+Assassin Guesses: 2853/100000
+
+Validation Log
+Loss: 0.48064723670482634, Total Score: 5.117399895191193
+Neutral Guesses: 7132/10000, Negative Guesses: 2868/10000
+Assassin Guesses: 0/10000
+
+Epoch: 9
+2024-02-15 19:24:33.268023: Iteration: 0/200
+2024-02-15 19:25:26.216430: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.4701110722124577, Total Score: 5.184330234527588
+Neutral Guesses: 71608/100000, Negative Guesses: 28390/100000
+Assassin Guesses: 2/100000
+
+Training with Model Output Log
+Loss: 0.4701110722124577, Total Score: 6.329150288105011
+Neutral Guesses: 34770/100000, Negative Guesses: 62186/100000
+Assassin Guesses: 3044/100000
+
+Validation Log
+Loss: 0.4609943577647209, Total Score: 5.256599867343903
+Neutral Guesses: 7182/10000, Negative Guesses: 2818/10000
+Assassin Guesses: 0/10000
+
+Epoch: 10
+2024-02-15 19:26:33.699360: Iteration: 0/200
+2024-02-15 19:27:27.195233: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.4544892664253712, Total Score: 5.28459023475647
+Neutral Guesses: 71848/100000, Negative Guesses: 28150/100000
+Assassin Guesses: 2/100000
+
+Training with Model Output Log
+Loss: 0.4544892664253712, Total Score: 6.920530323982239
+Neutral Guesses: 34936/100000, Negative Guesses: 61829/100000
+Assassin Guesses: 3235/100000
+
+Validation Log
+Loss: 0.4484383676946163, Total Score: 5.327699873447418
+Neutral Guesses: 7157/10000, Negative Guesses: 2843/10000
+Assassin Guesses: 0/10000
+
+(.venv) marcuswrrn@marcus:~/Projects/Machine_Learning/NLP/Codenames$ python3 ./src/train_dual_head.py -e 10 -b 500 -model_out "dual_head_experiment_asymetric_marg_leaky_relu.pth" -loss_out "dual_head_experiment_asymetric_marg_leaky_relu.png" -cuda Y -norm Y -code_data "./data/words_extended.json"
+Device: cuda
+Training Length: 100000
+Training
+Starting training at: 2024-02-15 19:45:16.810627
+Epoch: 1
+2024-02-15 19:45:18.091572: Iteration: 0/200
+2024-02-15 19:46:06.508125: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.7606479388475418, Total Score: 3.09531014084816
+Neutral Guesses: 74112/100000, Negative Guesses: 25888/100000
+Assassin Guesses: 0/100000
+
+Training with Model Output Log
+Loss: 0.7606479388475418, Total Score: 0.5429500259459019
+Neutral Guesses: 37480/100000, Negative Guesses: 56465/100000
+Assassin Guesses: 6055/100000
+
+Validation Log
+Loss: 0.6989230871200561, Total Score: 3.0984999251365664
+Neutral Guesses: 7470/10000, Negative Guesses: 2530/10000
+Assassin Guesses: 0/10000
+
+Epoch: 2
+2024-02-15 19:47:10.636940: Iteration: 0/200
+2024-02-15 19:48:02.904147: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.6966440635919571, Total Score: 3.132380155324936
+Neutral Guesses: 74025/100000, Negative Guesses: 25975/100000
+Assassin Guesses: 0/100000
+
+Training with Model Output Log
+Loss: 0.6966440635919571, Total Score: 0.6560200317203999
+Neutral Guesses: 37075/100000, Negative Guesses: 57546/100000
+Assassin Guesses: 5379/100000
+
+Validation Log
+Loss: 0.691340125799179, Total Score: 3.2173999190330504
+Neutral Guesses: 7318/10000, Negative Guesses: 2682/10000
+Assassin Guesses: 0/10000
+
+Epoch: 3
+2024-02-15 19:49:10.065058: Iteration: 0/200
+2024-02-15 19:50:02.959067: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.6142443528771401, Total Score: 3.8465201771259308
+Neutral Guesses: 71471/100000, Negative Guesses: 28521/100000
+Assassin Guesses: 8/100000
+
+Training with Model Output Log
+Loss: 0.6142443528771401, Total Score: 2.0838100972771643
+Neutral Guesses: 35819/100000, Negative Guesses: 60704/100000
+Assassin Guesses: 3477/100000
+
+Validation Log
+Loss: 0.5364930921792984, Total Score: 4.668699882030487
+Neutral Guesses: 7000/10000, Negative Guesses: 2999/10000
+Assassin Guesses: 1/10000
+
+Epoch: 4
+2024-02-15 19:51:10.659410: Iteration: 0/200
+2024-02-15 19:52:03.305246: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.5059307244420052, Total Score: 4.96205023765564
+Neutral Guesses: 71042/100000, Negative Guesses: 28955/100000
+Assassin Guesses: 3/100000
+
+Training with Model Output Log
+Loss: 0.5059307244420052, Total Score: 5.397030266523362
+Neutral Guesses: 34596/100000, Negative Guesses: 62200/100000
+Assassin Guesses: 3204/100000
+
+Validation Log
+Loss: 0.48212036401033403, Total Score: 5.170499880313873
+Neutral Guesses: 7097/10000, Negative Guesses: 2903/10000
+Assassin Guesses: 0/10000
+
+Epoch: 5
+2024-02-15 19:53:10.794225: Iteration: 0/200
+2024-02-15 19:54:03.951463: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.4674403309822083, Total Score: 5.235670258998871
+Neutral Guesses: 71658/100000, Negative Guesses: 28340/100000
+Assassin Guesses: 2/100000
+
+Training with Model Output Log
+Loss: 0.4674403309822083, Total Score: 6.812030313014984
+Neutral Guesses: 34831/100000, Negative Guesses: 61440/100000
+Assassin Guesses: 3729/100000
+
+Validation Log
+Loss: 0.4547280226647854, Total Score: 5.312199883460998
+Neutral Guesses: 7166/10000, Negative Guesses: 2834/10000
+Assassin Guesses: 0/10000
+
+Epoch: 6
+2024-02-15 19:55:11.571151: Iteration: 0/200
+2024-02-15 19:56:04.824571: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.44564681485295293, Total Score: 5.345090265274048
+Neutral Guesses: 71997/100000, Negative Guesses: 28000/100000
+Assassin Guesses: 3/100000
+
+Training with Model Output Log
+Loss: 0.44564681485295293, Total Score: 7.436280360221863
+Neutral Guesses: 35212/100000, Negative Guesses: 60767/100000
+Assassin Guesses: 4021/100000
+
+Validation Log
+Loss: 0.4374915859103203, Total Score: 5.374199903011322
+Neutral Guesses: 7252/10000, Negative Guesses: 2748/10000
+Assassin Guesses: 0/10000
+
+Epoch: 7
+2024-02-15 19:57:12.315546: Iteration: 0/200
+2024-02-15 19:58:06.036151: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.43123906418681146, Total Score: 5.408700261116028
+Neutral Guesses: 72235/100000, Negative Guesses: 27762/100000
+Assassin Guesses: 3/100000
+
+Training with Model Output Log
+Loss: 0.43123906418681146, Total Score: 7.779560372829438
+Neutral Guesses: 35423/100000, Negative Guesses: 60317/100000
+Assassin Guesses: 4260/100000
+
+Validation Log
+Loss: 0.42548138871788976, Total Score: 5.43389990568161
+Neutral Guesses: 7207/10000, Negative Guesses: 2793/10000
+Assassin Guesses: 0/10000
+
+Epoch: 8
+2024-02-15 19:59:14.076482: Iteration: 0/200
+2024-02-15 20:00:07.847056: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.42089757293462754, Total Score: 5.444330263137817
+Neutral Guesses: 72490/100000, Negative Guesses: 27507/100000
+Assassin Guesses: 3/100000
+
+Training with Model Output Log
+Loss: 0.42089757293462754, Total Score: 7.993390393257141
+Neutral Guesses: 35652/100000, Negative Guesses: 59914/100000
+Assassin Guesses: 4434/100000
+
+Validation Log
+Loss: 0.4166030052304268, Total Score: 5.456899905204773
+Neutral Guesses: 7212/10000, Negative Guesses: 2788/10000
+Assassin Guesses: 0/10000
+
+Epoch: 9
+2024-02-15 20:01:16.956603: Iteration: 0/200
+2024-02-15 20:02:11.413273: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.4131282278895378, Total Score: 5.468450284004211
+Neutral Guesses: 72741/100000, Negative Guesses: 27256/100000
+Assassin Guesses: 3/100000
+
+Training with Model Output Log
+Loss: 0.4131282278895378, Total Score: 8.137390358448028
+Neutral Guesses: 35793/100000, Negative Guesses: 59621/100000
+Assassin Guesses: 4586/100000
+
+Validation Log
+Loss: 0.4098255369067192, Total Score: 5.4827998971939085
+Neutral Guesses: 7245/10000, Negative Guesses: 2755/10000
+Assassin Guesses: 0/10000
+
+Epoch: 10
+2024-02-15 20:03:20.923042: Iteration: 0/200
+2024-02-15 20:04:17.252239: Iteration: 100/200
+Training with Search Output Log
+Loss: 0.4071164107322693, Total Score: 5.4874902439117434
+Neutral Guesses: 72737/100000, Negative Guesses: 27261/100000
+Assassin Guesses: 2/100000
+
+Training with Model Output Log
+Loss: 0.4071164107322693, Total Score: 8.23867040157318
+Neutral Guesses: 35870/100000, Negative Guesses: 59428/100000
+Assassin Guesses: 4702/100000
+
+Validation Log
+Loss: 0.4044999647140503, Total Score: 5.496899888515473
+Neutral Guesses: 7237/10000, Negative Guesses: 2763/10000
+Assassin Guesses: 0/10000
