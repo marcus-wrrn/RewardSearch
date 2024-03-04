@@ -36,9 +36,7 @@ class MORSpyMaster(nn.Module):
             nn.Tanh(),
             nn.Linear(2304, 1700),
             nn.Tanh(),
-            nn.Linear(1700, 1000),
-            nn.Tanh(),
-            nn.Linear(1000, 768),
+            nn.Linear(1700, 768),
         )
         self.vocab = vocab
         self.device = device
@@ -144,17 +142,6 @@ class MORSpyMaster(nn.Module):
         tot_reward = self._get_total_reward(word_embs_expanded, pos_encs, neg_encs, neut_encs, assas_encs, reverse=False)
 
         return self._find_scored_embeddings(tot_reward, word_embeddings)
-    
-
-    def _prune_word_embeddings(self, word_embeddings: Tensor, model_out: Tensor, sim_cutoff=0.08):
-        model_out_expanded = model_out.unsqueeze(1)
-        # Calculate similarity
-        sim_scores = F.cosine_similarity(word_embeddings, model_out_expanded, dim=2)
-        # Find std deviation of batch score
-        std_dev = sim_scores.std(dim=1).mean()
-        # Create pruning algorithm
-
-        print() # NOP for breakpoint
 
     def _get_combined_input(self, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assas_emb: Tensor) -> Tensor:
         neg_emb = self._process_embeddings(neg_embs)
