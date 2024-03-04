@@ -1,17 +1,18 @@
 import torch
 from torch.optim.lr_scheduler import ExponentialLR
-from loss_fns.loss import  RewardSearchLoss, RewardSearchWithWassersteinLoss
+from loss_fns.loss import  RewardSearchLoss
 from torch.utils.data import DataLoader
 from models.multi_objective_models import MORSpyMaster
 from datasets.dataset import CodeNamesDataset
-import numpy as np
 import datetime
 import argparse
 import utils.utilities as utils
 from utils.vector_search import VectorSearch
 from utils.hidden_vars import BASE_DIR
 import utils.utilities as utils
-from utils.logger import EpochLogger
+from utils.logger import EpochLogger, TrainLogger
+
+# This is the main Codenames Model with the best recorded performance -> main training script
 
 def init_hyperparameters(model: MORSpyMaster, device, normalize_reward):
     loss_fn = RewardSearchLoss(model_marg=0.7, search_marg=0.8, device=device, normalize=normalize_reward)
@@ -40,7 +41,8 @@ class LossResults:
 
 @torch.no_grad()
 def validate(model: MORSpyMaster, valid_loader: DataLoader, loss_fn: RewardSearchLoss, device: torch.device):
-    val_logger = EpochLogger(len(valid_loader.dataset), len(valid_loader), device, "Validation")
+    val_logger_search = EpochLogger(len(valid_loader.dataset), len(valid_loader), device, "Validation Search")
+    val_logger_model = EpochLogger(len(valid_loader.dataset), len(valid_loader), device, "Validation Model")
 
     for i, data in enumerate(valid_loader, 0):
         pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings = data[1]
@@ -52,18 +54,22 @@ def validate(model: MORSpyMaster, valid_loader: DataLoader, loss_fn: RewardSearc
         loss = loss_fn(model_out, search_out_max, search_out_min, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
         #score, results, neut_sum, assas_sum = utils.calc_codenames_score(search_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings, device)
 
-        val_logger.update_results(search_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
-        val_logger.update_loss(loss)
+        
+        val_logger_search.update_results(search_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+        val_logger_search.update_loss(loss)
 
-    return val_logger
+        val_logger_model.update_results(model_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+        val_logger_model.update_loss(loss)
+        
+
+    return val_logger_model, val_logger_search
 
 def train(n_epochs: int, model: MORSpyMaster, train_loader: DataLoader, valid_dataloader: DataLoader, device: torch.device, model_path: str, normalize_reward: bool, use_model_out: bool):
     loss_fn, optimizer, scheduler = init_hyperparameters(model, device, normalize_reward)
     print("Training")
     model.train()
 
-    losses_train = []
-    losses_valid = []
+    train_logger = TrainLogger()
 
     print(f"Starting training at: {datetime.datetime.now()}")
     for epoch in range(1, n_epochs + 1):
@@ -85,14 +91,6 @@ def train(n_epochs: int, model: MORSpyMaster, train_loader: DataLoader, valid_da
 
             loss = loss_fn(model_out, search_out_max, search_out_min, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
             
-            # score_input = search_out
-            
-            # if use_model_out:
-            #     score_input = model_out
-
-            # score, neg_sum, neut_sum, assas_sum = utils.calc_codenames_score(score_input, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings, device)
-            
-
             train_logger_model.update_results(model_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
             train_logger_search.update_results(search_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
 
@@ -105,19 +103,18 @@ def train(n_epochs: int, model: MORSpyMaster, train_loader: DataLoader, valid_da
         scheduler.step()
         
         # Validate model output
-        valid_logger = validate(model, valid_dataloader, loss_fn, device)
-        losses_train.append(train_logger_search.avg_loss)
-        losses_valid.append(valid_logger.avg_loss)
+        valid_logger_model, valid_logger_search = validate(model, valid_dataloader, loss_fn, device)
+        train_logger.add_loggers(train_logger_model, train_logger_search, valid_logger_model, valid_logger_search)
 
         print()
         train_logger_model.print_log()
         train_logger_search.print_log()
-        valid_logger.print_log()
+        # Print 
+        valid_logger_model.print_log()
+        valid_logger_search.print_log()
         
-        if len(losses_train) == 1 or losses_train[-1] < losses_train[-2]:
-            torch.save(model.state_dict(), model_path)
+        torch.save(model.state_dict(), model_path)
         
-    return losses_train, losses_valid
 
 def main(args):
     device = utils.get_device(args.cuda)
@@ -148,8 +145,8 @@ def main(args):
     model = MORSpyMaster(vector_db, device, neutral_weight=neut_weight, negative_weight=neg_weight, assas_weights=assas_weight, vocab_size=vocab_size, search_pruning=search_pruning)
     model.to(device)
 
-    losses_train, losses_valid = train(n_epochs=args.e, model=model, train_loader=train_dataloader, valid_dataloader=valid_dataloader, device=device, model_path=model_out, normalize_reward=normalize_reward, use_model_out=use_model_output)
-    utils.save_loss_plot(losses_train, losses_valid, save_path=loss_out)
+    train(n_epochs=args.e, model=model, train_loader=train_dataloader, valid_dataloader=valid_dataloader, device=device, model_path=model_out, normalize_reward=normalize_reward, use_model_out=use_model_output)
+    #utils.save_loss_plot(losses_train, losses_valid, save_path=loss_out)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

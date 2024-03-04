@@ -22,9 +22,11 @@ class MORSpyMaster(nn.Module):
     """
     Multi-Objective Retrieval model for codenames with 4 competing objectives
     """
-    def __init__(self, vocab: VectorSearch, device: torch.device, neutral_weight=1.0, negative_weight=0.0, assas_weights=-10.0, backbone='all-mpnet-base-v2', vocab_size=80, search_pruning=False):
+    def __init__(self, vocab: VectorSearch, device: torch.device, neutral_weight=1.0, negative_weight=0.0, assas_weights=-10.0, vocab_size=80, search_pruning=False):
         super().__init__()
-        self.encoder = SentenceEncoder(backbone)
+        # Commented out encoder to decrease model size
+        # self.encoder = SentenceEncoder(backbone)
+        
         self.vocab_size = vocab_size
 
         self.neut_weight = neutral_weight
