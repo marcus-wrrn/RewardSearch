@@ -1,5 +1,23 @@
 from torch import Tensor
 from utils.utilities import calc_codenames_score
+from collections import Counter
+
+class TrainLogger:
+    def __init__(self) -> None:
+        self.train_loggers_model = []
+        self.train_loggers_search = []
+
+        self.valid_loggers_model = []
+        self.valid_loggers_search = []
+    
+    def add_loggers(self, tmodel_log, tsearch_log, vmodel_log, vsearch_log):
+        self.train_loggers_model.append(tmodel_log)
+        self.train_loggers_search.append(tsearch_log)
+        self.valid_loggers_model.append(vmodel_log)
+        self.valid_loggers_search.append(vsearch_log)
+
+    def save_results(self, filepath: str):
+        ...
 
 class EpochLogger:
     def __init__(self, data_size: int, batch_size: int, device='cpu', name="Training"):
@@ -44,3 +62,18 @@ class EpochLogger:
     def print_log(self):
         output = self.to_string()
         print(output)
+    
+class TestLogger(EpochLogger):
+    def __init__(self, data_size: int, batch_size: int, device='cpu', name="Training"):
+        super().__init__(data_size, batch_size, device, name)
+        self.words = []
+    
+    def update_results(self, words: list, emb: Tensor, pos_emb: Tensor, neg_emg: Tensor, neut_emb: Tensor, assas_emb: Tensor):
+        super().update_results(emb, pos_emb, neg_emg, neut_emb, assas_emb)
+
+        self.words.extend([word[0] for word in words])
+
+    def print_word_distribution(self):
+        word_dist = Counter(self.words)
+        print(f"Word Distribution: ")
+        print(word_dist)
