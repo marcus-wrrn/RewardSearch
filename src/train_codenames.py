@@ -41,8 +41,8 @@ class LossResults:
 
 @torch.no_grad()
 def validate(model: MORSpyMaster, valid_loader: DataLoader, loss_fn: RewardSearchLoss, device: torch.device):
-    val_logger_search = EpochLogger(len(valid_loader.dataset), len(valid_loader), device, "Validation Search")
-    val_logger_model = EpochLogger(len(valid_loader.dataset), len(valid_loader), device, "Validation Model")
+    val_logger_search = EpochLogger(len(valid_loader.dataset), len(valid_loader), device=device, name="Validation Search")
+    val_logger_model = EpochLogger(len(valid_loader.dataset), len(valid_loader), device=device, name="Validation Model")
 
     for i, data in enumerate(valid_loader, 0):
         pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings = data[1]
@@ -64,18 +64,19 @@ def validate(model: MORSpyMaster, valid_loader: DataLoader, loss_fn: RewardSearc
 
     return val_logger_model, val_logger_search
 
-def train(n_epochs: int, model: MORSpyMaster, train_loader: DataLoader, valid_dataloader: DataLoader, device: torch.device, model_path: str, normalize_reward: bool, use_model_out: bool):
+def train(n_epochs: int, model: MORSpyMaster, train_loader: DataLoader, valid_loader: DataLoader, device: torch.device, normalize_reward: bool) -> TrainLogger:
+
     loss_fn, optimizer, scheduler = init_hyperparameters(model, device, normalize_reward)
     print("Training")
     model.train()
 
-    train_logger = TrainLogger()
+    train_logger = TrainLogger(n_epochs)
 
     print(f"Starting training at: {datetime.datetime.now()}")
     for epoch in range(1, n_epochs + 1):
         print(f"Epoch: {epoch}")
-        train_logger_search = EpochLogger(len(train_loader.dataset), len(train_loader), device, name="Training with Search Output")
-        train_logger_model = EpochLogger(len(train_loader.dataset), len(train_loader), device, name="Training with Model Output")
+        train_logger_search = EpochLogger(len(train_loader.dataset), len(train_loader), device=device, name="Training Search")
+        train_logger_model = EpochLogger(len(train_loader.dataset), len(train_loader), device=device, name="Training Model")
         for i, data in enumerate(train_loader, 0):
             if (i % 100 == 0):
                 print(f"{datetime.datetime.now()}: Iteration: {i}/{len(train_loader)}")
@@ -103,17 +104,18 @@ def train(n_epochs: int, model: MORSpyMaster, train_loader: DataLoader, valid_da
         scheduler.step()
         
         # Validate model output
-        valid_logger_model, valid_logger_search = validate(model, valid_dataloader, loss_fn, device)
+        valid_logger_model, valid_logger_search = validate(model, valid_loader, loss_fn, device)
         train_logger.add_loggers(train_logger_model, train_logger_search, valid_logger_model, valid_logger_search)
 
+        # TODO: Implement this in the train logger object
         print()
         train_logger_model.print_log()
         train_logger_search.print_log()
-        # Print 
+        
         valid_logger_model.print_log()
         valid_logger_search.print_log()
-        
-        torch.save(model.state_dict(), model_path)
+    
+    return train_logger
         
 
 def main(args):
@@ -122,8 +124,8 @@ def main(args):
     code_data = args.code_data
     guess_data = args.guess_data
     val_guess_data = args.val_guess_data
-    model_out = args.model_out
-    loss_out = args.loss_out
+    #model_out = args.model_out
+    #loss_out = args.loss_out
     vocab_size = args.vocab
 
     neut_weight = args.neut_weight
@@ -145,8 +147,24 @@ def main(args):
     model = MORSpyMaster(vector_db, device, neutral_weight=neut_weight, negative_weight=neg_weight, assas_weights=assas_weight, vocab_size=vocab_size, search_pruning=search_pruning)
     model.to(device)
 
-    train(n_epochs=args.e, model=model, train_loader=train_dataloader, valid_dataloader=valid_dataloader, device=device, model_path=model_out, normalize_reward=normalize_reward, use_model_out=use_model_output)
-    #utils.save_loss_plot(losses_train, losses_valid, save_path=loss_out)
+    logger = train(n_epochs=args.e, model=model, train_loader=train_dataloader, valid_loader=valid_dataloader, device=device, normalize_reward=normalize_reward)
+    
+    # Save log results
+    logger.save_results(args.dir)
+
+    # Save model information
+    model_path = args.dir + args.name + ".pth"
+    torch.save(model.state_dict(), model_path)
+
+
+class HyperParameters:
+    def __init__(self, args):
+        self.model_marg = args.m_marg
+        self.search_marg = args.s_marg
+        self.learning_rate = args.lr
+        self.gamma = args.gamma
+        self.weight_decay = args.w_decay
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -155,17 +173,20 @@ if __name__ == "__main__":
     parser.add_argument('-code_data', type=str, help="Codenames dataset path", default=BASE_DIR + "data/words.json")
     parser.add_argument('-guess_data', type=str, help="Geuss words dataset path", default=BASE_DIR + "data/codewords_full_w_assassin_valid.json")
     parser.add_argument('-vocab', type=int, default=80)
-    parser.add_argument('-weight_decay', type=float, default=0.1)
+    parser.add_argument('-w_decay', type=float, default=0.1)
+    parser.add_argument('-gamma', type=float, default=0.9)
+    parser.add_argument('-m_marg', type=float, default=0.7)
+
     parser.add_argument('-prune_search', type=str, help="Prunes the search window based on average similarity [Y/n]", default='N')
     parser.add_argument('-use_model_out', type=str, help="Determines whether to use the model output for scoring or the search output (highest scoring word embedding) [Y/n]", default='N')
-    parser.add_argument('-gamma', type=float, default=0.9)
+    
     parser.add_argument('-neut_weight', type=float, default=1.0)
     parser.add_argument('-neg_weight', type=float, default=0.0)
     parser.add_argument('-assas_weight', type=float, default=-10.0)
     parser.add_argument('-norm', type=str, help="Whether to normalize reward function, [Y/n]", default='Y')
     parser.add_argument('-val_guess_data', type=str, help="Filepath for the validation dataset", default=BASE_DIR + "data/codewords_full_w_assassin_mini.json")
-    parser.add_argument('-model_out', type=str, default=BASE_DIR + "test.pth")
-    parser.add_argument('-loss_out', type=str, default=BASE_DIR + "test.png")
     parser.add_argument('-cuda', type=str, help="Whether to use CPU or Cuda, use Y or N", default='Y')
+    parser.add_argument('-dir', type=str, help="Directory to save all results of the model", default=BASE_DIR + "model_data/testing/")
+    parser.add_argument('-name', type=str, help="Name of Model", default="test")
     args = parser.parse_args()
     main(args)
