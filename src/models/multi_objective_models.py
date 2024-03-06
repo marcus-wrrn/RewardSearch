@@ -19,7 +19,9 @@ class MOROutObj:
 
 class MORSpyMaster(nn.Module):
     """
-    Multi-Objective Retrieval model for codenames with 4 competing objectives
+    Multi-Objective Retrieval model with 4 competing objectives
+
+    Used to play the role of spymaster in Codenames but accepts text and image embeddings as well
     """
     def __init__(self, vocab: VectorSearch, device: torch.device, neutral_weight=1.0, negative_weight=0.0, assas_weights=-10.0, vocab_size=80, search_pruning=False):
         super().__init__()
@@ -173,6 +175,7 @@ class MORSpyMaster(nn.Module):
 
 
 class MORSpyDualHead(MORSpyMaster):
+    """Experimental model with multiple outputs, used to demonstrate objective functions flexibility"""
     def __init__(self, vocab: VectorSearch, device: device, neutral_weight=1, negative_weight=0, assassin_weights=-10, backbone='all-mpnet-base-v2', vocab_size=80, search_pruning=False):
         super().__init__(vocab, device, neutral_weight, negative_weight, assassin_weights, backbone, vocab_size, search_pruning)
 
@@ -240,6 +243,8 @@ class MORSpyDualHead(MORSpyMaster):
 class MORSpyMasterSmall(nn.Module):
     """
     Multi-Objective Retrieval model for codenames -> uses only positive, negative and neutral objectives (no assassin capability)
+
+    Old model using outdated architecture, kept for reference
     """
     def __init__(self, vocab: VectorSearch, device: torch.device, neutral_weight=1.0, negative_weight=0.0, backbone='all-mpnet-base-v2', vocab_size=80):
         super().__init__()
@@ -362,4 +367,3 @@ class MORSpyMasterSmall(nn.Module):
             return model_out, search_out, search_out_max, search_out_min
         
         return words[search_out_index], search_out, dist
-

@@ -14,10 +14,10 @@ from utils.logger import EpochLogger, TrainLogger
 
 # This is the main Codenames Model with the best recorded performance -> main training script
 
-def init_hyperparameters(model: MORSpyMaster, device, normalize_reward):
-    loss_fn = RewardSearchLoss(model_marg=0.7, search_marg=0.8, device=device, normalize=normalize_reward)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.00001, weight_decay=0.1)
-    scheduler = ExponentialLR(optimizer, gamma=0.9)
+def init_hyperparameters(hp: utils.HyperParameters, model: MORSpyMaster, device, normalize_reward):
+    loss_fn = RewardSearchLoss(model_marg=hp.model_marg, search_marg=hp.search_marg, device=device, normalize=normalize_reward)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=hp.learning_rate, weight_decay=hp.weight_decay)
+    scheduler = ExponentialLR(optimizer, gamma=hp.gamma)
     return loss_fn, optimizer, scheduler
 
 class LossResults:
@@ -64,16 +64,16 @@ def validate(model: MORSpyMaster, valid_loader: DataLoader, loss_fn: RewardSearc
 
     return val_logger_model, val_logger_search
 
-def train(n_epochs: int, model: MORSpyMaster, train_loader: DataLoader, valid_loader: DataLoader, device: torch.device, normalize_reward: bool) -> TrainLogger:
+def train(hyperparams: utils.HyperParameters, model: MORSpyMaster, train_loader: DataLoader, valid_loader: DataLoader, device: torch.device, normalize_reward: bool) -> TrainLogger:
 
-    loss_fn, optimizer, scheduler = init_hyperparameters(model, device, normalize_reward)
+    loss_fn, optimizer, scheduler = init_hyperparameters(hyperparams, model, device, normalize_reward)
     print("Training")
     model.train()
 
-    train_logger = TrainLogger(n_epochs)
+    train_logger = TrainLogger(hyperparams.n_epochs)
 
     print(f"Starting training at: {datetime.datetime.now()}")
-    for epoch in range(1, n_epochs + 1):
+    for epoch in range(1, hyperparams.n_epochs + 1):
         print(f"Epoch: {epoch}")
         train_logger_search = EpochLogger(len(train_loader.dataset), len(train_loader), device=device, name="Training Search")
         train_logger_model = EpochLogger(len(train_loader.dataset), len(train_loader), device=device, name="Training Model")
@@ -125,7 +125,7 @@ def main(args):
     guess_data = args.guess_data
     val_guess_data = args.val_guess_data
 
-    hyperparams = HyperParameters(args)
+    hyperparams = utils.HyperParameters(args)
 
     normalize_reward = utils.convert_args_str_to_bool(args.norm)
 
@@ -145,7 +145,7 @@ def main(args):
     model = MORSpyMaster(vector_db, device, neutral_weight=hyperparams.neut_weight, negative_weight=hyperparams.neg_weight, assas_weights=hyperparams.assas_weight, vocab_size=hyperparams.vocab_size)
     model.to(device)
 
-    logger = train(n_epochs=args.e, model=model, train_loader=train_dataloader, valid_loader=valid_dataloader, device=device, normalize_reward=normalize_reward)
+    logger = train(hyperparams=hyperparams, model=model, train_loader=train_dataloader, valid_loader=valid_dataloader, device=device, normalize_reward=normalize_reward)
     
     # Save log results
     logger.save_results(args.dir)
@@ -154,26 +154,9 @@ def main(args):
     model_path = args.dir + args.name + ".pth"
     torch.save(model.state_dict(), model_path)
 
-
-class HyperParameters:
-    def __init__(self, args):
-        self.model_marg = args.m_marg
-        self.search_marg = args.s_marg
-        self.learning_rate = args.lr
-        self.gamma = args.gamma
-        self.weight_decay = args.w_decay
-        self.n_epochs = args.e
-        self.batch_size = args.b
-        
-        self.vocab_size = args.vocab
-        self.neut_weight = args.neut_weight
-        self.neg_weight = args.neg_weight
-        self.assas_weight = args.assas_weight
-        self.using_sentences = utils.convert_args_str_to_bool(args.sentences)
-    
-    def save_params(self):
-        ...
-        
+    # Save hyperparameters
+    hp_path = args.dir + "hyperparameters.json"
+    hyperparams.save_params(hp_path)
 
 if __name__ == "__main__":
     # Most default values can be kept the same, but can be changed if needed

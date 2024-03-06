@@ -2,6 +2,7 @@ import torch
 from torch import Tensor
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
+import json
 
 def get_device(is_cuda: str):
     if (is_cuda.lower() == 'y' and torch.cuda.is_available()):
@@ -89,3 +90,39 @@ def calc_codenames_score(model_out: Tensor, pos_encs: Tensor, neg_encs: Tensor, 
     neut_sum = torch.sum(first_incorrect_value == 1, dim=0)
 
     return num_correct.float().mean(), neg_sum, neut_sum, assassin_sum
+
+class HyperParameters:
+    def __init__(self, args):
+        self.model_marg = args.m_marg
+        self.search_marg = args.s_marg
+        self.learning_rate = args.lr
+        self.gamma = args.gamma
+        self.weight_decay = args.w_decay
+        self.n_epochs = args.e
+        self.batch_size = args.b
+        
+        self.vocab_size = args.vocab
+        self.neut_weight = args.neut_weight
+        self.neg_weight = args.neg_weight
+        self.assas_weight = args.assas_weight
+        self.using_sentences = convert_args_str_to_bool(args.sentences)
+    
+    def save_params(self, filepath: str):
+        data = {
+            "model_margin": self.model_marg,
+            "search_margin": self.search_marg,
+            "learning_rate": self.learning_rate,
+            "gamma": self.gamma,
+            "weight_decay": self.weight_decay,
+            "num_epochs": self.n_epochs,
+            "batch_size": self.batch_size,
+            "vocab_size": self.vocab_size,
+            "neut_weight": self.neut_weight,
+            "neg_weight": self.neg_weight,
+            "assas_weight": self.assas_weight,
+            "sentence_trained": self.using_sentences
+        }
+        with open(filepath, 'w') as file:
+            json.dump(data, file)
+
+        
