@@ -40,6 +40,7 @@ class Processing:
 
         with open(filepath, 'w') as file:
             json.dump(data, file)
+    
 
 if __name__ == "__main__":
     proc = Processing(encoder=None, filepath="/home/marcuswrrn/Projects/Machine_Learning/NLP/codenames/data/wordlist-eng.txt", download=True)

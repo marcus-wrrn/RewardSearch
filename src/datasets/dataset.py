@@ -133,8 +133,10 @@ class CodeNamesDataset(CodeGiverDataset):
 
 class SentenceNamesDataset(CodeNamesDataset):
     # TODO: Refactor, this does not follow best practices at all
-    def __init__(self, code_dir: str, game_dir: str, vocab_dir: str, seperator='<SEP>'):
+    def __init__(self, code_dir: str, game_dir: str, vocab_dir=None, seperator='<SEP>'):
         super().__init__(code_dir, game_dir, seperator)
+        if not vocab_dir:
+            return
         vocab_data = self._load_data(vocab_dir)
         self.vocab_dict = {vocab_data['title'][i]: vocab_data['title_embeddings'][j] for i, j in zip(vocab_data['title'], vocab_data['title_embeddings'])}
 

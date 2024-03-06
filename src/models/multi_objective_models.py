@@ -6,7 +6,6 @@ from torch import Tensor, device
 #from transformers import DebertaConfig, DebertaModel, DebertaTokenizer
 from utils.vector_search import VectorSearch
 from models.base_models import SentenceEncoder
-from scipy.stats import wasserstein_distance
 
 # Primary Codenames models, used in current tests
 
@@ -24,9 +23,6 @@ class MORSpyMaster(nn.Module):
     """
     def __init__(self, vocab: VectorSearch, device: torch.device, neutral_weight=1.0, negative_weight=0.0, assas_weights=-10.0, vocab_size=80, search_pruning=False):
         super().__init__()
-        # Commented out encoder to decrease model size
-        # self.encoder = SentenceEncoder(backbone)
-        
         self.vocab_size = vocab_size
 
         self.neut_weight = neutral_weight

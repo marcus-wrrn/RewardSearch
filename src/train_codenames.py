@@ -3,7 +3,7 @@ from torch.optim.lr_scheduler import ExponentialLR
 from loss_fns.loss import  RewardSearchLoss
 from torch.utils.data import DataLoader
 from models.multi_objective_models import MORSpyMaster
-from datasets.dataset import CodeNamesDataset
+from datasets.dataset import CodeNamesDataset, SentenceNamesDataset
 import datetime
 import argparse
 import utils.utilities as utils
@@ -124,27 +124,25 @@ def main(args):
     code_data = args.code_data
     guess_data = args.guess_data
     val_guess_data = args.val_guess_data
-    #model_out = args.model_out
-    #loss_out = args.loss_out
-    vocab_size = args.vocab
 
-    neut_weight = args.neut_weight
-    neg_weight = args.neg_weight
-    assas_weight = args.assas_weight
+    hyperparams = HyperParameters(args)
 
-    use_model_output = utils.convert_args_str_to_bool(args.use_model_out)
-    search_pruning = utils.convert_args_str_to_bool(args.prune_search)
     normalize_reward = utils.convert_args_str_to_bool(args.norm)
 
     print(f"Device: {device}")
-    train_dataset = CodeNamesDataset(code_dir=code_data, game_dir=guess_data)
+    if hyperparams.using_sentences:
+        train_dataset = SentenceNamesDataset(code_dir=code_data, game_dir=guess_data, vocab_dir=args.vocab_dir)
+        valid_dataset = SentenceNamesDataset(code_dir=code_data, game_dir=val_guess_data)
+    else:
+        train_dataset = CodeNamesDataset(code_dir=code_data, game_dir=guess_data)
+        valid_dataset = CodeNamesDataset(code_dir=code_data, game_dir=val_guess_data)
+        
     train_dataloader = DataLoader(train_dataset, batch_size=args.b, num_workers=4)
-    print(f"Training Length: {len(train_dataset)}")
-    valid_dataset = CodeNamesDataset(code_dir=code_data, game_dir=val_guess_data)
     valid_dataloader = DataLoader(valid_dataset, batch_size=50, num_workers=4)
 
+    print(f"Training Length: {len(train_dataset)}")
     vector_db = VectorSearch(train_dataset, prune=True)
-    model = MORSpyMaster(vector_db, device, neutral_weight=neut_weight, negative_weight=neg_weight, assas_weights=assas_weight, vocab_size=vocab_size, search_pruning=search_pruning)
+    model = MORSpyMaster(vector_db, device, neutral_weight=hyperparams.neut_weight, negative_weight=hyperparams.neg_weight, assas_weights=hyperparams.assas_weight, vocab_size=hyperparams.vocab_size)
     model.to(device)
 
     logger = train(n_epochs=args.e, model=model, train_loader=train_dataloader, valid_loader=valid_dataloader, device=device, normalize_reward=normalize_reward)
@@ -164,21 +162,37 @@ class HyperParameters:
         self.learning_rate = args.lr
         self.gamma = args.gamma
         self.weight_decay = args.w_decay
-
+        self.n_epochs = args.e
+        self.batch_size = args.b
+        
+        self.vocab_size = args.vocab
+        self.neut_weight = args.neut_weight
+        self.neg_weight = args.neg_weight
+        self.assas_weight = args.assas_weight
+        self.using_sentences = utils.convert_args_str_to_bool(args.sentences)
+    
+    def save_params(self):
+        ...
+        
 
 if __name__ == "__main__":
+    # Most default values can be kept the same, but can be changed if needed
     parser = argparse.ArgumentParser()
     parser.add_argument('-e', type=int, help="Number of epochs", default=10)
     parser.add_argument('-b', type=int, help="Batch Size", default=400)
     parser.add_argument('-code_data', type=str, help="Codenames dataset path", default=BASE_DIR + "data/words.json")
     parser.add_argument('-guess_data', type=str, help="Geuss words dataset path", default=BASE_DIR + "data/codewords_full_w_assassin_valid.json")
+    parser.add_argument('-vocab_dir', type=str, help="Vocab directory for sentences dataset", default=BASE_DIR + "data/news_vocab.json")
     parser.add_argument('-vocab', type=int, default=80)
     parser.add_argument('-w_decay', type=float, default=0.1)
     parser.add_argument('-gamma', type=float, default=0.9)
     parser.add_argument('-m_marg', type=float, default=0.7)
+    parser.add_argument('-s_marg', type=float, default=0.8)
+    parser.add_argument('-lr', type=float, default=0.00001)
 
     parser.add_argument('-prune_search', type=str, help="Prunes the search window based on average similarity [Y/n]", default='N')
     parser.add_argument('-use_model_out', type=str, help="Determines whether to use the model output for scoring or the search output (highest scoring word embedding) [Y/n]", default='N')
+    parser.add_argument('-sentences', type=str, help="Whether the model is being trained on longer texts [Y/n]", default='N')
     
     parser.add_argument('-neut_weight', type=float, default=1.0)
     parser.add_argument('-neg_weight', type=float, default=0.0)

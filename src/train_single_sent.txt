@@ -1,2 +1,0 @@
-python train_single_sent.py -code_data "../data/words.json" -guess_data "../data/three_word_data_medium.json" -val_guess_data "../data/three_word_data.json" -out "../data/saved_models/combined_test1.pth" -loss_out "../data/saved_models/combined_test1.png" -cuda Y
-
