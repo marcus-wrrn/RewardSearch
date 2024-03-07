@@ -162,7 +162,7 @@ if __name__ == "__main__":
     # Most default values can be kept the same, but can be changed if needed
     parser = argparse.ArgumentParser()
     parser.add_argument('-e', type=int, help="Number of epochs", default=10)
-    parser.add_argument('-b', type=int, help="Batch Size", default=400)
+    parser.add_argument('-b', type=int, help="Batch Size", default=500)
     parser.add_argument('-code_data', type=str, help="Codenames dataset path", default=BASE_DIR + "data/words.json")
     parser.add_argument('-guess_data', type=str, help="Geuss words dataset path", default=BASE_DIR + "data/codewords_full_w_assassin_valid.json")
     parser.add_argument('-vocab_dir', type=str, help="Vocab directory for sentences dataset", default=BASE_DIR + "data/news_vocab.json")

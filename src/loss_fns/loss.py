@@ -264,6 +264,7 @@ class RewardSearchLoss(RewardSearchLossSmall):
         m_pos_score, m_neg_score, m_neut_score, m_assas_score = self._calc_cos_sim(model_out_expanded, pos_encs, neg_encs, neutral_encs, assas_expanded)
         pos_score, neg_score = self._calc_final_scores(m_pos_score, m_neg_score, m_neut_score, m_assas_score)
         loss_model = F.relu((neg_score - pos_score) + self.margin).mean()
+
         loss_search = F.triplet_margin_loss(model_out, search_max, search_min, margin=self.search_marg)
 
         return loss_model + loss_search
