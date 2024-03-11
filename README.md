@@ -1,5 +1,10 @@
-## What is Codenames
+## Abstract
 
+Information Retrieval (IR) systems are at the core of search engines, data mining and recently Retrieval Augmented Generation (RAG), which is used to provide context to generative AI for knowledge intensive tasks. However, modern deep learning methods used in IR struggle to adapt to objectives that they were not trained for. Existing IR models require fine-tuning to accommodate for downstream tasks. This requires access to large amounts of labeled data and can potentially harm the models ability to generalize. Additionally fine-tuning large models means that their encoded outputs cannot be reused for other systems. To solve these problems we propose Reward Search, a novel loss function and IR architecture capable of retrieving infor-
+mation with multiple user defined objectives. We demonstrate the models capability by playing the language game Codenames which requires finding text from a knowledge base that satisfies multiple parameters. Reward Search takes 10 minutes to train on mid-range commercial hardware, is capable of handling a dynamic number of inputs and all trainable parameters can be stored in a 50MB file
+
+
+## What is Codenames
 Codenames is a party game developed by Czech Games, for a detailed explanation on how to play please refer to either (https://czechgames.com/files/rules/codenames-rules-en.pdf) or unofficially (http://codewordsgame.com/how-to-play)
 
 For the purpose of this project the rules are explained as followed.
@@ -22,8 +27,13 @@ This task can be thought of as a traditional similarity search method, with the 
 The loss function used in the model is unique, using a modified version of triplet loss alongside a method referred to as Reward/Reinforcement search. Unlike typical Reinforcement learning where a reward is applied directly to the loss function, instead triplet loss is used to score the model outputs overall 'rotation' against its highest and lowest scoring search results, in a given search window.
 Please refer to the `multi_objective_models.py` file  within the `src/models` directory for the full implementation. 
 
-Currently the models best implementation can guess a word that on average results in a selection rate of 5.48/9 target words selected with a negative word selection rate (the first non-target word selected) of about 27% compared to neutral being around 73%, the assassin is never selected during the full tests. Additionally due to the relatively small size of the model, it is able to achieve this performance in about 20 minutes of training, with a training dataset of 100,000 potential game boards over 10 epochs. All tests are performed on a GTX 1660ti mobile GPU. 
-   
-I am still experimenting with the model and tweaking the loss function so I will have more detailed results posted soon. However, it should be noted that these results already show better performance than a person (typically only getting about 2-3/9 target words correct on the first turn) and the neutral vs. negative word selection rate shows that the current loss function `KeypointTriangulationLoss` is capable of handling multiple objectives in a similarity search related context.
+### Long Text Support
+The model has been shown to work on longer texts and in some cases performs better than single words. However, the long-text data pipeline is still being worked on and is not as streamlined as the single word model. 
 
-Please note that this work is planned to be part of a much larger research project, to be presented alongside an official paper. If you wish to use any of the following work in a public manner, I simply ask that you cite this github repository directly or to Marcus Warren. Thank you.  
+### Frontend
+This code is used purely for training and testing the RewardSearch model. For a working fronted please refer to the project `https://github.com/aclarke500/qmind-codenames-front-end` which is used to play against the model. Models trained here can be imported to the frontend to play against.
+
+### Further Information
+We have provided the most recent draft of our paper within the project. We are currently working on getting it put on arxiv and will be eventually released as part of the CUCAI conference proceedings. For any additional questions feel free to email `18mgw1@queensu.ca` about the project. 
+
+
