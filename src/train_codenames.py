@@ -2,7 +2,7 @@ import torch
 from torch.optim.lr_scheduler import ExponentialLR
 from loss_fns.loss import  RewardSearchLoss
 from torch.utils.data import DataLoader
-from models.multi_objective_models import MORSpyMaster
+from models.multi_objective_models import MORSpyMaster, MORSpyMiniLM, MORSpyMPNet
 from datasets.dataset import CodeNamesDataset, SentenceNamesDataset
 import datetime
 import argparse
@@ -116,7 +116,6 @@ def train(hyperparams: utils.HyperParameters, model: MORSpyMaster, train_loader:
         valid_logger_search.print_log()
     
     return train_logger
-        
 
 def main(args):
     device = utils.get_device(args.cuda)
@@ -134,15 +133,24 @@ def main(args):
         train_dataset = SentenceNamesDataset(code_dir=code_data, game_dir=guess_data, vocab_dir=args.vocab_dir)
         valid_dataset = SentenceNamesDataset(code_dir=code_data, game_dir=val_guess_data)
     else:
-        train_dataset = CodeNamesDataset(code_dir=code_data, game_dir=guess_data)
-        valid_dataset = CodeNamesDataset(code_dir=code_data, game_dir=val_guess_data)
+        train_dataset = CodeNamesDataset(code_dir=code_data, game_dir=guess_data, seperator=' ')
+        valid_dataset = CodeNamesDataset(code_dir=code_data, game_dir=val_guess_data, seperator=' ')
         
     train_dataloader = DataLoader(train_dataset, batch_size=args.b, num_workers=4)
     valid_dataloader = DataLoader(valid_dataset, batch_size=50, num_workers=4)
 
     print(f"Training Length: {len(train_dataset)}")
-    vector_db = VectorSearch(train_dataset, prune=True)
-    model = MORSpyMaster(vector_db, device, neutral_weight=hyperparams.neut_weight, negative_weight=hyperparams.neg_weight, assas_weights=hyperparams.assas_weight, vocab_size=hyperparams.vocab_size)
+    vector_db = VectorSearch(train_dataset, prune=True, n_dim=768)
+
+    # Initialize model
+    backbone_name = hyperparams.backbone
+    if (backbone_name == "all-mpnet-base-v2"):
+        model = MORSpyMPNet(vector_db, device, neutral_weight=hyperparams.neut_weight, negative_weight=hyperparams.neg_weight, assas_weights=hyperparams.assas_weight, vocab_size=hyperparams.vocab_size)
+    elif (backbone_name == "all-MiniLM-L6-v2"):
+        model = MORSpyMPNet(vector_db, device, neutral_weight=hyperparams.neut_weight, negative_weight=hyperparams.neg_weight, assas_weights=hyperparams.assas_weight, vocab_size=hyperparams.vocab_size)
+    else:
+        model = MORSpyMaster(vector_db, device, neutral_weight=hyperparams.neut_weight, negative_weight=hyperparams.neg_weight, assas_weights=hyperparams.assas_weight, vocab_size=hyperparams.vocab_size)
+    
     model.to(device)
 
     logger = train(hyperparams=hyperparams, model=model, train_loader=train_dataloader, valid_loader=valid_dataloader, device=device, normalize_reward=normalize_reward)
@@ -163,9 +171,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-e', type=int, help="Number of epochs", default=10)
     parser.add_argument('-b', type=int, help="Batch Size", default=500)
-    parser.add_argument('-code_data', type=str, help="Codenames dataset path", default=BASE_DIR + "data/words.json")
-    parser.add_argument('-guess_data', type=str, help="Geuss words dataset path", default=BASE_DIR + "data/codewords_full_w_assassin_valid.json")
+    parser.add_argument('-code_data', type=str, help="Codenames dataset path", default=BASE_DIR + "data/words_extended_minilm.json")
+    parser.add_argument('-guess_data', type=str, help="Geuss words dataset path", default=BASE_DIR + "data/minilm_board_large.json")
+    parser.add_argument('-val_guess_data', type=str, help="Filepath for the validation dataset", default=BASE_DIR + "data/minilm_board.json")
+
     parser.add_argument('-vocab_dir', type=str, help="Vocab directory for sentences dataset", default=BASE_DIR + "data/news_vocab.json")
+    
     parser.add_argument('-vocab', type=int, default=80)
     parser.add_argument('-w_decay', type=float, default=0.1)
     parser.add_argument('-gamma', type=float, default=0.9)
@@ -182,9 +193,10 @@ if __name__ == "__main__":
     parser.add_argument('-neg_weight', type=float, default=0.0)
     parser.add_argument('-assas_weight', type=float, default=-10.0)
     parser.add_argument('-norm', type=str, help="Whether to normalize reward function, [Y/n]", default='Y')
-    parser.add_argument('-val_guess_data', type=str, help="Filepath for the validation dataset", default=BASE_DIR + "data/codewords_full_w_assassin_mini.json")
+    
     parser.add_argument('-cuda', type=str, help="Whether to use CPU or Cuda, use Y or N", default='Y')
     parser.add_argument('-dir', type=str, help="Directory to save all results of the model", default=BASE_DIR + "model_data/testing/")
     parser.add_argument('-name', type=str, help="Name of Model", default="test")
+    parser.add_argument('-backbone', type=str, help="Encoder backbone: determines the size of the search head dependent on size of embeddings", default='all-mpnet-base-v2')
     args = parser.parse_args()
     main(args)
