@@ -117,11 +117,8 @@ class TrainLogger:
         obj = {"Model": valid_model, "Search": valid_search}
         with open(valid_path, 'w') as file:
             json.dump(obj, file)
-        
 
-
-    
-    
+            
 class TestLogger(EpochLogger):
     def __init__(self, data_size: int, batch_size: int, device='cpu', name="Training"):
         super().__init__(data_size, batch_size, device, name)
