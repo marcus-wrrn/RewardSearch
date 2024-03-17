@@ -3,6 +3,7 @@ import json
 from sentence_transformers import SentenceTransformer
 import torch
 import pandas as pd
+import argparse
 
 class GameBoard:
     def __init__(self, text: list, pos_num=6, neg_num=6, has_assassin=False):
@@ -52,15 +53,15 @@ class GameBoard:
     
 
 class GameManager:
-    def __init__(self, textfile: str, encoder: SentenceTransformer, num_positive=9, num_negative=9, has_assassin=False, ntexts=25, seperator=" ") -> None:
-        self.texts = self._get_texts(textfile)
+    def __init__(self, filepath: str, num_positive=9, num_negative=9, has_assassin=False, ntexts=25, seperator="<SEP>") -> None:
+        self.texts = self._get_texts(filepath)
         self.ntexts = ntexts
         self.num_pos = num_positive
         self.num_neg = num_negative
         self.has_assassin = has_assassin
 
         self.board = self._create_gameboard()
-        self.encoder = encoder
+        #self.encoder = encoder
 
         self.seperator = seperator
 
@@ -81,13 +82,13 @@ class GameManager:
         assassin = self.board.assassin
         return pos, neg, neutral, assassin
     
-    def get_encoding(self):
-        pos, neg, neutral = self.get_combined_texts()
-        with torch.no_grad():
-            pos_emb = self.encoder.encode(pos)
-            neg_emb = self.encoder.encode(neg)
-            neutral_emb = self.encoder.encode(neutral)
-        return pos_emb, neg_emb, neutral_emb
+    # def get_encoding(self):
+    #     pos, neg, neutral = self.get_combined_texts()
+    #     with torch.no_grad():
+    #         pos_emb = self.encoder.encode(pos)
+    #         neg_emb = self.encoder.encode(neg)
+    #         neutral_emb = self.encoder.encode(neutral)
+    #     return pos_emb, neg_emb, neutral_emb
     
     def shuffle_board(self):
         random.shuffle(self.texts)
@@ -129,17 +130,20 @@ def create_dataset(game_manager: GameManager, filepath: str, num_datapoints: int
 
     with open(filepath, 'w') as file:
         json.dump(data, file)
-    print("Dataset created")
+    print(f"Dataset created at {filepath}")
 
-def main():
-    textfile = "/home/marcuswrrn/Projects/Machine_Learning/NLP/Codenames/data/news_board.json"
-    practice_dataset = "/home/marcuswrrn/Projects/Machine_Learning/NLP/Codenames/data/codetexts_valid.json"
-
-
-    # encoder = SentenceTransformer('all-mpnet-base-v2')
-    manager = LongTextManager(textfile, None, num_positive=9, num_negative=9, has_assassin=True, ntexts=25, seperator="<SEP>")
-    create_dataset(manager, practice_dataset, num_datapoints=10000)
+def main(args):
+    manager = GameManager(args.path, num_positive=9, num_negative=9, has_assassin=True, ntexts=25)
+    #manager = LongTextManager(textfile, None, num_positive=9, num_negative=9, has_assassin=True, ntexts=25, seperator="<SEP>")
+    print(f"Creating Dataset")
+    create_dataset(manager, args.out, num_datapoints=args.n)
 
     
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-path', type=str, help="File containing all processed data used for the board")
+    parser.add_argument('-out', type=str, help="Filepath to save output")
+    parser.add_argument('-n', type=int, help="Number of datapoints", default=10000)
+
+    args = parser.parse_args()
+    main(args)

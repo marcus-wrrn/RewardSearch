@@ -1,16 +1,22 @@
 from sentence_transformers import SentenceTransformer
 import json
+import argparse
+"""This script takes a list of words/texts and processes it into a useable format"""
+
+
 
 class Processing:
-    def __init__(self, encoder: SentenceTransformer | None, filepath="../data/wordlist-eng.txt", download=False) -> None:
-        if download:
-            self.codewords = self._get_words(filepath)
+    def __init__(self, encoder: SentenceTransformer | None, board_path: str, vocab_path: str, encode=False) -> None:
+        if encode:
+            self.codewords = self._get_words(board_path)
+            print(f"Processing Board texts")
             self.code_embeddings = self._get_embeddings(encoder, self.codewords)
 
-            self.guesses = self._get_words("/home/marcuswrrn/Projects/Machine_Learning/NLP/codenames/data/webster.txt")
+            self.guesses = self._get_words(vocab_path)
+            print(f"Processing Vocab texts")
             self.geuss_embeddings = self._get_embeddings(encoder, self.guesses)
         else:
-            with open(filepath, 'r') as file:
+            with open(board_path, 'r') as file:
                 data = json.load(file)
             self.codewords = data['codewords']
             self.code_embeddings = data['embeddings']
@@ -27,7 +33,7 @@ class Processing:
         if type(encoder) == SentenceTransformer:
             return encoder.encode(words)
         
-        encoder = SentenceTransformer("all-mpnet-base-v2")
+        encoder = SentenceTransformer("all-MiniLM-L6-v2")
         return encoder.encode(words)
     
     def to_json(self, filepath: str):
@@ -42,6 +48,20 @@ class Processing:
             json.dump(data, file)
     
 
+def main(args):
+    encoder = SentenceTransformer("all-MiniLM-L6-v2")
+    encode_text = True if args.encode.lower() == 'y' else False
+    print(f"Model: {encoder._get_name()}")
+    proc = Processing(encoder=encoder, board_path=args.board, vocab_path=args.vocab, encode=encode_text)
+    proc.to_json(args.out)
+    print(f"Saved output to {args.out}")
+
 if __name__ == "__main__":
-    proc = Processing(encoder=None, filepath="/home/marcuswrrn/Projects/Machine_Learning/NLP/codenames/data/wordlist-eng.txt", download=True)
-    proc.to_json("/home/marcuswrrn/Projects/Machine_Learning/NLP/codenames/data/words_extended.json")
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-board', type=str, help="Filepath containing all texts for the board")
+    parser.add_argument('-vocab', type=str, help="Filepath containing all vocab texts")
+    parser.add_argument('-out', type=str, help="Filepath to save output")
+    parser.add_argument('-encode', type=str, help="Create embeddings from text [Y/n]", default='Y')
+    args = parser.parse_args()
+    main(args)
+    
