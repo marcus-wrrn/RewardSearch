@@ -87,7 +87,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-code_dir', type=str, help='Dataset Path', default="/home/marcuswrrn/Projects/Machine_Learning/NLP/Codenames/data/words_extended.json")
     parser.add_argument('-guess_dir', type=str, help="", default="/home/marcuswrrn/Projects/Machine_Learning/NLP/Codenames/data/codewords_full_w_assassin_mini.json")
-    parser.add_argument('-m', type=str, help='Model Path', default="/home/marcuswrrn/Projects/Machine_Learning/NLP/Codenames/eval_model.pth")
+    parser.add_argument('-m', type=str, help='Model Path', default="/home/marcuswrrn/Projects/Machine_Learning/NLP/Codenames/model_data/sent_neut_2/model.pth")
     parser.add_argument('-use_model_out', type=str, help="Whether to use model output or search output, use Y or N", default='N')
     parser.add_argument('-sw', type=int, help='Model search window', default=80)
     parser.add_argument('-b', type=int, help='Batch Size', default=200)

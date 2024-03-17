@@ -89,7 +89,7 @@ class TrainLogger:
             assas_rate.append(logger.assas_sum / logger.data_size)
         
         # TODO: Fix scuffed name 
-        obj = {"Name": loggers[0].name, "Targets": num_targets, "Target Rate": targ_rate, "Neutral Rate": neut_rate, "Negative Rate": neg_rate, "Assassin Rate": assas_rate}
+        obj = {"Name": loggers[0].name, "Loss": loss, "Targets": num_targets, "Target Rate": targ_rate, "Neutral Rate": neut_rate, "Negative Rate": neg_rate, "Assassin Rate": assas_rate}
         return obj
 
     def save_results(self, directory: str):

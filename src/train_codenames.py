@@ -172,6 +172,7 @@ if __name__ == "__main__":
     parser.add_argument('-m_marg', type=float, default=0.7)
     parser.add_argument('-s_marg', type=float, default=0.8)
     parser.add_argument('-lr', type=float, default=0.00001)
+    parser.add_argument('-bias', type=str, help="Whether to add bias between the layers[Y/n]", default="Y")
 
     parser.add_argument('-prune_search', type=str, help="Prunes the search window based on average similarity [Y/n]", default='N')
     parser.add_argument('-use_model_out', type=str, help="Determines whether to use the model output for scoring or the search output (highest scoring word embedding) [Y/n]", default='N')

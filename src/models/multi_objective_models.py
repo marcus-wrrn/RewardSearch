@@ -23,7 +23,7 @@ class MORSpyMaster(nn.Module):
 
     Used to play the role of spymaster in Codenames but accepts text and image embeddings as well
     """
-    def __init__(self, vocab: VectorSearch, device: torch.device, neutral_weight=1.0, negative_weight=0.0, assas_weights=-10.0, vocab_size=80, search_pruning=False):
+    def __init__(self, vocab: VectorSearch, device: torch.device, neutral_weight=1.0, negative_weight=0.0, assas_weights=-10.0, vocab_size=80, search_pruning=False, bias=True):
         super().__init__()
         self.vocab_size = vocab_size
 
@@ -32,11 +32,11 @@ class MORSpyMaster(nn.Module):
         self.assas_weights = assas_weights
         
         self.fc = nn.Sequential(
-            nn.Linear(3072, 2304),
+            nn.Linear(3072, 2304, bias=bias),
             nn.Tanh(),
-            nn.Linear(2304, 1700),
+            nn.Linear(2304, 1700, bias=bias),
             nn.Tanh(),
-            nn.Linear(1700, 768),
+            nn.Linear(1700, 768, bias=bias),
         )
         self.vocab = vocab
         self.device = device
@@ -171,7 +171,7 @@ class MORSpyMaster(nn.Module):
         if self.training:
             return model_out, search_out, search_out_max, search_out_min
         
-        return MOROutObj(words[search_out_index.cpu()][:, :1], model_out, search_out, search_out_max, search_out_min)
+        return words, search_out_index, (model_out, search_out)
 
 
 class MORSpyDualHead(MORSpyMaster):

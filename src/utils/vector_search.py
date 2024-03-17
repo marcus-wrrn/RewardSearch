@@ -4,7 +4,7 @@ import faiss
 import torch
 
 
-class VectorSearch():
+class VectorSearch:
     def __init__(self, dataset: CodeGiverDataset, prune=False, n_dim=768, n_neighbours=32, useGuessData=True) -> None:
         self.vocab_words, self.vocab_embeddings = dataset.get_vocab(guess_data=useGuessData) if not prune else dataset.get_pruned_vocab()
         self.vocab_words = np.array(self.vocab_words)

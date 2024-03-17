@@ -106,6 +106,7 @@ class HyperParameters:
         self.neg_weight = args.neg_weight
         self.assas_weight = args.assas_weight
         self.using_sentences = convert_args_str_to_bool(args.sentences)
+        self.bias = convert_args_str_to_bool(args.bias)
     
     def save_params(self, filepath: str):
         data = {
@@ -120,7 +121,8 @@ class HyperParameters:
             "neut_weight": self.neut_weight,
             "neg_weight": self.neg_weight,
             "assas_weight": self.assas_weight,
-            "sentence_trained": self.using_sentences
+            "sentence_trained": self.using_sentences,
+            "bias": self.bias
         }
         with open(filepath, 'w') as file:
             json.dump(data, file)
