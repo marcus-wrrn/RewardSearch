@@ -6,8 +6,8 @@ import torch
 
 class VectorSearch:
     def __init__(self, dataset: CodeGiverDataset, prune=False, n_dim=768, n_neighbours=32, useGuessData=True) -> None:
-        self.vocab_words, self.vocab_embeddings = dataset.get_vocab(guess_data=useGuessData) if not prune else dataset.get_pruned_vocab()
-        self.vocab_words = np.array(self.vocab_words)
+        self.vocab_texts, self.vocab_embeddings = dataset.get_vocab(guess_data=useGuessData) if not prune else dataset.get_pruned_vocab()
+        self.vocab_texts = np.array(self.vocab_texts)
         # Process embeddings
         self.vocab_embeddings = np.array(self.vocab_embeddings).astype(np.float32)
         # Initialize index + add embeddings
@@ -20,10 +20,10 @@ class VectorSearch:
         # D: L2 distance from input, I: index of result
         D, I = self.index.search(search_input, num_results)
         # Map index values to words
-        words = self.vocab_words[I]
+        words = self.vocab_texts[I]
         embeddings = self.vocab_embeddings[I]
         return words, embeddings, D
 
-    def index_to_words(self, index):
-        return self.vocab_words[index]
+    def index_to_texts(self, index):
+        return self.vocab_texts[index]
     

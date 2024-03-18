@@ -133,8 +133,14 @@ def create_dataset(game_manager: GameManager, filepath: str, num_datapoints: int
     print(f"Dataset created at {filepath}")
 
 def main(args):
-    manager = GameManager(args.path, num_positive=9, num_negative=9, has_assassin=True, ntexts=25)
-    #manager = LongTextManager(textfile, None, num_positive=9, num_negative=9, has_assassin=True, ntexts=25, seperator="<SEP>")
+    using_long_text = True if args.long_texts.lower() == 'y' else False
+    has_assassin = True if args.has_assass.lower() == 'y' else False
+
+    if using_long_text:
+        manager = LongTextManager(args.path, None, num_positive=9, num_negative=9, has_assassin=True, ntexts=args.ntexts, seperator=args.sep)
+    else:
+        manager = GameManager(args.path, num_positive=9, num_negative=9, has_assassin=True, ntexts=25)
+    
     print(f"Creating Dataset")
     create_dataset(manager, args.out, num_datapoints=args.n)
 
@@ -144,6 +150,12 @@ if __name__ == "__main__":
     parser.add_argument('-path', type=str, help="File containing all processed data used for the board")
     parser.add_argument('-out', type=str, help="Filepath to save output")
     parser.add_argument('-n', type=int, help="Number of datapoints", default=10000)
+    parser.add_argument('-long_texts', type=str, help="Data is based on long texts: [Y/n]", default='N')
+    parser.add_argument('-ntexts', type=int, default=25)
+    parser.add_argument('-num_pos', type=int, default=9)
+    parser.add_argument('-num_neg', type=int, default=9)
+    parser.add_argument('-has_assas', type=str, help="enables assassin: [Y/n]", default='Y')
+    parser.add_argument('-seperator', type=str, help="determines how text is seperated", default='<SEP>')
 
     args = parser.parse_args()
     main(args)

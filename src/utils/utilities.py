@@ -3,6 +3,7 @@ from torch import Tensor
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
 import json
+import random
 
 def get_device(is_cuda: str):
     if (is_cuda.lower() == 'y' and torch.cuda.is_available()):
@@ -107,6 +108,7 @@ class HyperParameters:
         self.assas_weight = args.assas_weight
         self.using_sentences = convert_args_str_to_bool(args.sentences)
         self.bias = convert_args_str_to_bool(args.bias)
+        self.dynamic_board = convert_args_str_to_bool(args.dynamic_board)
         self.backbone = args.backbone
     
     def save_params(self, filepath: str):
@@ -129,4 +131,7 @@ class HyperParameters:
         with open(filepath, 'w') as file:
             json.dump(data, file)
 
-        
+
+def slice_board_embeddings(embs: Tensor):
+    rand_num = random.randint(1, embs.shape[1])
+    return embs[:, :rand_num, :]

@@ -10,8 +10,9 @@ class EpochLogger:
         self.name = name
         self.total_loss = 0.0
 
-        self.num_correct = 0
-        self.num_targets = num_targets
+        self.target_perc = 0
+        self.target_percent = 0
+        self.num_targets = []
 
         self.neut_sum = 0
         self.neg_sum = 0
@@ -20,10 +21,12 @@ class EpochLogger:
         self.data_size = data_size
         self.batch_size = batch_size
         self.device = device
+
+        self.count = 0
     
     @property
-    def avg_correct(self):
-        return self.num_correct / self.batch_size
+    def avg_target_perc(self):
+        return self.target_perc / self.count
     
     @property
     def avg_loss(self):
@@ -31,23 +34,27 @@ class EpochLogger:
 
     @property
     def json(self) -> json:
-        obj = {"Avg Targets": self.avg_correct, "Neutral": self.neut_sum, "Negative": self.neg_sum, "Assassin": self.assas_sum, "Loss": self.avg_loss}
+        obj = {"Avg Targets": self.avg_target_perc, "Neutral": self.neut_sum, "Negative": self.neg_sum, "Assassin": self.assas_sum, "Loss": self.avg_loss}
         return json(obj)
     
     def update_loss(self, loss: Tensor):
         self.total_loss += loss.item()
 
     def update_results(self, emb: Tensor, pos_emb: Tensor, neg_emg: Tensor, neut_emb: Tensor, assas_emb: Tensor):
+        self.count += 1
         num_correct, neg_sum, neut_sum, assas_sum = calc_codenames_score(emb, pos_emb, neg_emg, neut_emb, assas_emb, self.device)
 
-        self.num_correct += num_correct.item()
+        self.target_perc += num_correct.item() / pos_emb.shape[1]
+        self.num_targets.append(pos_emb.shape[1]) 
         self.neg_sum += neg_sum.item()
         self.neut_sum += neut_sum.item()
         self.assas_sum += assas_sum.item()
 
+        
+
     def to_string(self):
         out_str = f"{self.name} Log\n"
-        out_str += f"Loss: {self.avg_loss}, Total Score: {self.avg_correct}\n"
+        out_str += f"Loss: {self.avg_loss}, Target Selection: {self.avg_target_perc}\n"
         out_str += f"Neutral Guesses: {self.neut_sum}/{self.data_size}, Negative Guesses: {self.neg_sum}/{self.data_size}\n"        
         out_str += f"Assassin Guesses: {self.assas_sum}/{self.data_size}\n"
         return out_str
@@ -74,7 +81,6 @@ class TrainLogger:
     def _combine_loggers(self, loggers: list[EpochLogger]):
         loss = []
         targ_rate = []
-        num_targets = []
         neut_rate = []
         neg_rate = []
         assas_rate = []
@@ -82,14 +88,13 @@ class TrainLogger:
         for logger in loggers:
             loss.append(logger.avg_loss)
 
-            targ_rate.append(logger.avg_correct / logger.num_targets)
-            num_targets.append(logger.avg_correct)
+            targ_rate.append(logger.avg_target_perc)
             neut_rate.append(logger.neut_sum / logger.data_size)
             neg_rate.append(logger.neg_sum / logger.data_size)
             assas_rate.append(logger.assas_sum / logger.data_size)
         
         # TODO: Fix scuffed name 
-        obj = {"Name": loggers[0].name, "Loss": loss, "Targets": num_targets, "Target Rate": targ_rate, "Neutral Rate": neut_rate, "Negative Rate": neg_rate, "Assassin Rate": assas_rate}
+        obj = {"Name": loggers[0].name, "Loss": loss, "Target Rate": targ_rate, "Neutral Rate": neut_rate, "Negative Rate": neg_rate, "Assassin Rate": assas_rate}
         return obj
 
     def save_results(self, directory: str):
@@ -118,7 +123,7 @@ class TrainLogger:
         with open(valid_path, 'w') as file:
             json.dump(obj, file)
 
-            
+
 class TestLogger(EpochLogger):
     def __init__(self, data_size: int, batch_size: int, device='cpu', name="Training"):
         super().__init__(data_size, batch_size, device, name)

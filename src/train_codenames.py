@@ -81,11 +81,18 @@ def train(hyperparams: utils.HyperParameters, model: MORSpyMaster, train_loader:
             if (i % 100 == 0):
                 print(f"{datetime.datetime.now()}: Iteration: {i}/{len(train_loader)}")
             pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings = data[1]
+
             # Put embeddings on device
             pos_embeddings = pos_embeddings.to(device)
             neg_embeddings = neg_embeddings.to(device)
             neut_embeddings = neut_embeddings.to(device)
             assas_embeddings = assas_embeddings.to(device)
+
+            # Randomly remove words from the board 
+            if hyperparams.dynamic_board:
+                pos_embeddings = utils.slice_board_embeddings(pos_embeddings)
+                neg_embeddings = utils.slice_board_embeddings(neg_embeddings)
+                neut_embeddings = utils.slice_board_embeddings(neut_embeddings)
             
             optimizer.zero_grad()
             model_out, search_out, search_out_max, search_out_min = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
@@ -171,9 +178,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-e', type=int, help="Number of epochs", default=10)
     parser.add_argument('-b', type=int, help="Batch Size", default=500)
-    parser.add_argument('-code_data', type=str, help="Codenames dataset path", default=BASE_DIR + "data/words_extended_minilm.json")
-    parser.add_argument('-guess_data', type=str, help="Geuss words dataset path", default=BASE_DIR + "data/minilm_board_large.json")
-    parser.add_argument('-val_guess_data', type=str, help="Filepath for the validation dataset", default=BASE_DIR + "data/minilm_board.json")
+    parser.add_argument('-code_data', type=str, help="Codenames dataset path", default=BASE_DIR + "data/words.json")
+    parser.add_argument('-guess_data', type=str, help="Geuss words dataset path", default=BASE_DIR + "data/codewords_full_w_assassin_valid.json")
+    parser.add_argument('-val_guess_data', type=str, help="Filepath for the validation dataset", default=BASE_DIR + "data/codewords_full_w_assassin_mini.json")
 
     parser.add_argument('-vocab_dir', type=str, help="Vocab directory for sentences dataset", default=BASE_DIR + "data/news_vocab.json")
     
@@ -197,6 +204,7 @@ if __name__ == "__main__":
     parser.add_argument('-cuda', type=str, help="Whether to use CPU or Cuda, use Y or N", default='Y')
     parser.add_argument('-dir', type=str, help="Directory to save all results of the model", default=BASE_DIR + "model_data/testing/")
     parser.add_argument('-name', type=str, help="Name of Model", default="test")
-    parser.add_argument('-backbone', type=str, help="Encoder backbone: determines the size of the search head dependent on size of embeddings", default='all-mpnet-base-v2')
+    parser.add_argument('-backbone', type=str, help="Encoder backbone: determines the size of the search head, dependent on size of embeddings", default='all-mpnet-base-v2')
+    parser.add_argument('-dynamic_board', type=str, help="Makes each batch have a different board: [Y/n]", default='Y')
     args = parser.parse_args()
     main(args)

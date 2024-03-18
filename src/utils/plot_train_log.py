@@ -1,9 +1,10 @@
 import json
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from utils.hidden_vars import BASE_DIR
 
 # Load data from JSON file
-with open('/home/marcuswrrn/Projects/Machine_Learning/NLP/Codenames/recorded_results/model_output_standard.json', 'r') as file:
+with open(BASE_DIR + 'recorded_results/model_output_standard.json', 'r') as file:
     data = json.load(file)
 
 # Function to plot the data
