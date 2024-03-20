@@ -102,7 +102,6 @@ def train(hyperparams: utils.HyperParameters, model: MORSpyMaster, train_loader:
             train_logger_model.update_results(model_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
             train_logger_search.update_results(search_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
 
-
             train_logger_model.update_loss(loss)
             train_logger_search.update_loss(loss)
             loss.backward()
@@ -132,6 +131,8 @@ def main(args):
     val_guess_data = args.val_guess_data
 
     hyperparams = utils.HyperParameters(args)
+    if (hyperparams.dynamic_board):
+        print("Training with dynamic board")
 
     normalize_reward = utils.convert_args_str_to_bool(args.norm)
 
@@ -154,7 +155,7 @@ def main(args):
     if (backbone_name == "all-mpnet-base-v2"):
         model = MORSpyMPNet(vector_db, device, neutral_weight=hyperparams.neut_weight, negative_weight=hyperparams.neg_weight, assas_weights=hyperparams.assas_weight, vocab_size=hyperparams.vocab_size)
     elif (backbone_name == "all-MiniLM-L6-v2"):
-        model = MORSpyMPNet(vector_db, device, neutral_weight=hyperparams.neut_weight, negative_weight=hyperparams.neg_weight, assas_weights=hyperparams.assas_weight, vocab_size=hyperparams.vocab_size)
+        model = MORSpyMiniLM(vector_db, device, neutral_weight=hyperparams.neut_weight, negative_weight=hyperparams.neg_weight, assas_weights=hyperparams.assas_weight, vocab_size=hyperparams.vocab_size)
     else:
         model = MORSpyMaster(vector_db, device, neutral_weight=hyperparams.neut_weight, negative_weight=hyperparams.neg_weight, assas_weights=hyperparams.assas_weight, vocab_size=hyperparams.vocab_size)
     
@@ -205,6 +206,6 @@ if __name__ == "__main__":
     parser.add_argument('-dir', type=str, help="Directory to save all results of the model", default=BASE_DIR + "model_data/testing/")
     parser.add_argument('-name', type=str, help="Name of Model", default="test")
     parser.add_argument('-backbone', type=str, help="Encoder backbone: determines the size of the search head, dependent on size of embeddings", default='all-mpnet-base-v2')
-    parser.add_argument('-dynamic_board', type=str, help="Makes each batch have a different board: [Y/n]", default='Y')
+    parser.add_argument('-dynamic_board', type=str, help="Makes each batch have a different board: [Y/n]", default='n')
     args = parser.parse_args()
     main(args)
