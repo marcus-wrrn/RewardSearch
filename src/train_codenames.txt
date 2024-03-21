@@ -4,3 +4,9 @@ python3 ./src/train_codenames.py -e 10 -b 500 -code_data "./data/words_extended.
 
 # To train model on longer text use the following arguments, the pipeline for processing longer text data is still being worked on. You must enable sentences and provide a seperate vocabulary dataset
 python3 ./src/train_codenames.py -e 10 -b 500 -code_data "./data/game_board.json" -guess_data "./data/codetexts_full.json" -vocab_dir "./data/game_vocab.json"  -val_guess_data "./data/codetexts_valid.json" -name "testing" -dir "./model_data/long_text/" -sentences Y
+
+python3 ./src/train_codenames.py -e 10 -b 500 -code_data "./data/words_extended.json" -guess_data "./data/codewords_full_w_assassin_valid.json" -val_guess_data "./data/codewords_full_w_assassin_mini.json" -name "testing" -dir "./model_data/wierd_weights_words/"
+
+
+
+python3 ./src/train_codenames.py -e 10 -b 500 -code_data "./data/words_extended.json" -guess_data "./data/codewords_full_w_assassin_valid.json" -val_guess_data "./data/codewords_full_w_assassin_mini.json" -name "model" -dir "./model_data/mpnet_dynamic_board/" -backbone "all-mpnet-base-v2" -sep ' ' -dynamic_board Y

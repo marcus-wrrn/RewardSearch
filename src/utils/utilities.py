@@ -110,6 +110,16 @@ class HyperParameters:
         self.bias = convert_args_str_to_bool(args.bias)
         self.dynamic_board = convert_args_str_to_bool(args.dynamic_board)
         self.backbone = args.backbone
+        self.emb_size = self._get_emb_size()
+        self.seperator = args.sep
+    
+    def _get_emb_size(self):
+        if (self.backbone == "all-mpnet-base-v2"):
+            return 768
+        if (self.backbone == "all-MiniLM-L6-v2"):
+            return 384
+        return 768
+
     
     def save_params(self, filepath: str):
         data = {

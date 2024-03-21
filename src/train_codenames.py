@@ -130,38 +130,37 @@ def main(args):
     guess_data = args.guess_data
     val_guess_data = args.val_guess_data
 
-    hyperparams = utils.HyperParameters(args)
-    if (hyperparams.dynamic_board):
+    hpram = utils.HyperParameters(args)
+    if (hpram.dynamic_board):
         print("Training with dynamic board")
 
     normalize_reward = utils.convert_args_str_to_bool(args.norm)
-
     print(f"Device: {device}")
-    if hyperparams.using_sentences:
-        train_dataset = SentenceNamesDataset(code_dir=code_data, game_dir=guess_data, vocab_dir=args.vocab_dir)
-        valid_dataset = SentenceNamesDataset(code_dir=code_data, game_dir=val_guess_data)
+    if hpram.using_sentences:
+        train_dataset = SentenceNamesDataset(code_dir=code_data, game_dir=guess_data, vocab_dir=args.vocab_dir, seperator=hpram.seperator)
+        valid_dataset = SentenceNamesDataset(code_dir=code_data, game_dir=val_guess_data, seperator=hpram.seperator)
     else:
-        train_dataset = CodeNamesDataset(code_dir=code_data, game_dir=guess_data, seperator=' ')
-        valid_dataset = CodeNamesDataset(code_dir=code_data, game_dir=val_guess_data, seperator=' ')
+        train_dataset = CodeNamesDataset(code_dir=code_data, game_dir=guess_data, seperator=hpram.seperator)
+        valid_dataset = CodeNamesDataset(code_dir=code_data, game_dir=val_guess_data, seperator=hpram.seperator)
         
     train_dataloader = DataLoader(train_dataset, batch_size=args.b, num_workers=4)
     valid_dataloader = DataLoader(valid_dataset, batch_size=50, num_workers=4)
 
     print(f"Training Length: {len(train_dataset)}")
-    vector_db = VectorSearch(train_dataset, prune=True, n_dim=768)
+    vector_db = VectorSearch(train_dataset, prune=True, n_dim=hpram.emb_size)
 
     # Initialize model
-    backbone_name = hyperparams.backbone
+    backbone_name = hpram.backbone
     if (backbone_name == "all-mpnet-base-v2"):
-        model = MORSpyMPNet(vector_db, device, neutral_weight=hyperparams.neut_weight, negative_weight=hyperparams.neg_weight, assas_weights=hyperparams.assas_weight, vocab_size=hyperparams.vocab_size)
+        model = MORSpyMPNet(vector_db, device, neutral_weight=hpram.neut_weight, negative_weight=hpram.neg_weight, assas_weights=hpram.assas_weight, vocab_size=hpram.vocab_size)
     elif (backbone_name == "all-MiniLM-L6-v2"):
-        model = MORSpyMiniLM(vector_db, device, neutral_weight=hyperparams.neut_weight, negative_weight=hyperparams.neg_weight, assas_weights=hyperparams.assas_weight, vocab_size=hyperparams.vocab_size)
+        model = MORSpyMiniLM(vector_db, device, neutral_weight=hpram.neut_weight, negative_weight=hpram.neg_weight, assas_weights=hpram.assas_weight, vocab_size=hpram.vocab_size)
     else:
-        model = MORSpyMaster(vector_db, device, neutral_weight=hyperparams.neut_weight, negative_weight=hyperparams.neg_weight, assas_weights=hyperparams.assas_weight, vocab_size=hyperparams.vocab_size)
+        model = MORSpyMaster(vector_db, device, neutral_weight=hpram.neut_weight, negative_weight=hpram.neg_weight, assas_weights=hpram.assas_weight, vocab_size=hpram.vocab_size)
     
     model.to(device)
 
-    logger = train(hyperparams=hyperparams, model=model, train_loader=train_dataloader, valid_loader=valid_dataloader, device=device, normalize_reward=normalize_reward)
+    logger = train(hyperparams=hpram, model=model, train_loader=train_dataloader, valid_loader=valid_dataloader, device=device, normalize_reward=normalize_reward)
     
     # Save log results
     logger.save_results(args.dir)
@@ -172,7 +171,7 @@ def main(args):
 
     # Save hyperparameters
     hp_path = args.dir + "hyperparameters.json"
-    hyperparams.save_params(hp_path)
+    hpram.save_params(hp_path)
 
 if __name__ == "__main__":
     # Most default values can be kept the same, but can be changed if needed
@@ -192,6 +191,7 @@ if __name__ == "__main__":
     parser.add_argument('-s_marg', type=float, default=0.8)
     parser.add_argument('-lr', type=float, default=0.00001)
     parser.add_argument('-bias', type=str, help="Whether to add bias between the layers[Y/n]", default="Y")
+    parser.add_argument('-sep', type=str, help="Seperator token used for seperating texts in the dataset, default <SEP>", default=' ')
 
     parser.add_argument('-prune_search', type=str, help="Prunes the search window based on average similarity [Y/n]", default='N')
     parser.add_argument('-use_model_out', type=str, help="Determines whether to use the model output for scoring or the search output (highest scoring word embedding) [Y/n]", default='N')

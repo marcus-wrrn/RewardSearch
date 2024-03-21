@@ -172,7 +172,7 @@ class MORSpyMaster(nn.Module):
         if self.training:
             return model_out, search_out, search_out_max, search_out_min
         
-        return words, search_out_index, (model_out, search_out)
+        return words, search_out_index, model_out, search_out
 
 class MORSpyMPNet(MORSpyMaster):
     def __init__(self, vocab: VectorSearch, device: device, neutral_weight=1, negative_weight=0, assas_weights=-10, vocab_size=80, search_pruning=False, bias=True):

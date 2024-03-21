@@ -126,7 +126,7 @@ class TrainLogger:
 
 class TestLogger(EpochLogger):
     def __init__(self, data_size: int, batch_size: int, device='cpu', name="Training"):
-        super().__init__(data_size, batch_size, device, name)
+        super().__init__(data_size, batch_size, device=device, name=name)
         self.words = []
     
     def update_results(self, words: list, emb: Tensor, pos_emb: Tensor, neg_emg: Tensor, neut_emb: Tensor, assas_emb: Tensor):
