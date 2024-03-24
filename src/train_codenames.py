@@ -10,12 +10,13 @@ import utils.utilities as utils
 from utils.vector_search import VectorSearch
 from utils.hidden_vars import BASE_DIR
 import utils.utilities as utils
+from utils.hyperparameters import HyperParameters
 from utils.logger import EpochLogger, TrainLogger
 import random
 
 # This is the main Codenames Model with the best recorded performance -> main training script
 
-def init_hyperparameters(hp: utils.HyperParameters, model: MORSpyMaster, device, normalize_reward):
+def init_hyperparameters(hp: HyperParameters, model: MORSpyMaster, device, normalize_reward):
     loss_fn = RewardSearchLoss(model_marg=hp.model_marg, search_marg=hp.search_marg, device=device, normalize=normalize_reward)
     optimizer = torch.optim.AdamW(model.parameters(), lr=hp.learning_rate, weight_decay=hp.weight_decay)
     scheduler = ExponentialLR(optimizer, gamma=hp.gamma)
@@ -65,7 +66,7 @@ def validate(model: MORSpyMaster, valid_loader: DataLoader, loss_fn: RewardSearc
 
     return val_logger_model, val_logger_search
 
-def train(hprams: utils.HyperParameters, model: MORSpyMaster, train_loader: DataLoader, valid_loader: DataLoader, device: torch.device, normalize_reward: bool) -> TrainLogger:
+def train(hprams: HyperParameters, model: MORSpyMaster, train_loader: DataLoader, valid_loader: DataLoader, device: torch.device, normalize_reward: bool) -> TrainLogger:
 
     loss_fn, optimizer, scheduler = init_hyperparameters(hprams, model, device, normalize_reward)
     print("Training")
@@ -153,7 +154,7 @@ def main(args):
     guess_data = args.guess_data
     val_guess_data = args.val_guess_data
 
-    hpram = utils.HyperParameters(args)
+    hpram = HyperParameters(args)
     if (hpram.dynamic_board):
         print("Training with dynamic board")
 
