@@ -1,4 +1,4 @@
-from models.multi_objective_models import MORSpyMaster
+from models.multi_objective_models import MORSpyMaster, MORSpyMPNet
 from datasets.dataset import CodeNamesDataset
 import torch
 import torch.nn.functional as F
@@ -10,6 +10,8 @@ from utils.vector_search import VectorSearch
 import utils.utilities as utils
 from utils.logger import TestLogger
 from sentence_transformers import SentenceTransformer
+
+# This script is a current work in progress
 
 def calc_cos_score(anchor, pos_encs, neg_encs):
     anchor = anchor.unsqueeze(1)
@@ -78,11 +80,11 @@ def model_inference(model: MORSpyMaster, encoder: SentenceTransformer, device="c
     assas_text = "Train"
     assas_emb = get_embeddings(encoder, assas_text).to(device)
 
-    words, search_index, logits = model(pos_embs, neg_embs, neut_embs, assas_emb)
+    words, search_index, model_out, search_out = model(pos_embs, neg_embs, neut_embs, assas_emb)
     search_index = search_index.cpu()[0]
 
     word = words[0][search_index]
-    print(word)
+    print(f"Chosen Word: {word}")
         
 def main(args):
     device = utils.get_device(args.cuda)
@@ -96,7 +98,7 @@ def main(args):
 
     # Initialize model
     print("Loading Model")
-    model = MORSpyMaster(vector_db, device, vocab_size=args.sw)
+    model = MORSpyMPNet(vector_db, device, vocab_size=args.sw)
     model.load_state_dict(torch.load(args.m))
     model.to(device)
     model.eval()
