@@ -1,0 +1,1 @@
+{"model_margin": 0.7, "search_margin": 0.8, "learning_rate": 1e-05, "gamma": 0.9, "weight_decay": 0.1, "num_epochs": 10, "batch_size": 500, "vocab_size": 80, "neut_weight": 1.0, "neg_weight": 0.0, "assas_weight": -10.0, "sentence_trained": false, "bias": true, "backbone": "all-MiniLM-L6-v2"}
