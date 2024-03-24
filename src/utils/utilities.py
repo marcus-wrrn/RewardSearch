@@ -102,7 +102,7 @@ class HyperParameters:
         self.n_epochs = args.e
         self.batch_size = args.b
         
-        self.vocab_size = args.vocab
+        self.search_window = args.sw
         self.neut_weight = args.neut_weight
         self.neg_weight = args.neg_weight
         self.assas_weight = args.assas_weight
@@ -112,6 +112,7 @@ class HyperParameters:
         self.backbone = args.backbone
         self.emb_size = self._get_emb_size()
         self.seperator = args.sep
+        self.burst_counter = False
     
     def _get_emb_size(self):
         if (self.backbone == "all-mpnet-base-v2"):
@@ -130,7 +131,7 @@ class HyperParameters:
             "weight_decay": self.weight_decay,
             "num_epochs": self.n_epochs,
             "batch_size": self.batch_size,
-            "vocab_size": self.vocab_size,
+            "vocab_size": self.search_window,
             "neut_weight": self.neut_weight,
             "neg_weight": self.neg_weight,
             "assas_weight": self.assas_weight,
@@ -143,5 +144,6 @@ class HyperParameters:
 
 
 def slice_board_embeddings(embs: Tensor):
+    """Used to randomly remove words/collections of text, from the game board"""
     rand_num = random.randint(1, embs.shape[1])
     return embs[:, :rand_num, :]

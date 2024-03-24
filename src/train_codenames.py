@@ -2,7 +2,7 @@ import torch
 from torch.optim.lr_scheduler import ExponentialLR
 from loss_fns.loss import  RewardSearchLoss
 from torch.utils.data import DataLoader
-from models.multi_objective_models import MORSpyMaster, MORSpyMiniLM, MORSpyMPNet
+from models.multi_objective_models import MORSpyMaster, MORSpyMiniLM, MORSpyMPNet, MORSpyIntegratedRewards
 from datasets.dataset import CodeNamesDataset, SentenceNamesDataset
 import datetime
 import argparse
@@ -11,6 +11,7 @@ from utils.vector_search import VectorSearch
 from utils.hidden_vars import BASE_DIR
 import utils.utilities as utils
 from utils.logger import EpochLogger, TrainLogger
+import random
 
 # This is the main Codenames Model with the best recorded performance -> main training script
 
@@ -64,19 +65,24 @@ def validate(model: MORSpyMaster, valid_loader: DataLoader, loss_fn: RewardSearc
 
     return val_logger_model, val_logger_search
 
-def train(hyperparams: utils.HyperParameters, model: MORSpyMaster, train_loader: DataLoader, valid_loader: DataLoader, device: torch.device, normalize_reward: bool) -> TrainLogger:
+def train(hprams: utils.HyperParameters, model: MORSpyMaster, train_loader: DataLoader, valid_loader: DataLoader, device: torch.device, normalize_reward: bool) -> TrainLogger:
 
-    loss_fn, optimizer, scheduler = init_hyperparameters(hyperparams, model, device, normalize_reward)
+    loss_fn, optimizer, scheduler = init_hyperparameters(hprams, model, device, normalize_reward)
     print("Training")
     model.train()
 
-    train_logger = TrainLogger(hyperparams.n_epochs)
+    train_logger = TrainLogger(hprams.n_epochs)
 
     print(f"Starting training at: {datetime.datetime.now()}")
-    for epoch in range(1, hyperparams.n_epochs + 1):
+    for epoch in range(1, hprams.n_epochs + 1):
         print(f"Epoch: {epoch}")
         train_logger_search = EpochLogger(len(train_loader.dataset), len(train_loader), device=device, name="Training Search")
         train_logger_model = EpochLogger(len(train_loader.dataset), len(train_loader), device=device, name="Training Model")
+
+        counter = 0
+        pos_num = -1
+        neg_num = -1
+        neut_num = -1
         for i, data in enumerate(train_loader, 0):
             if (i % 100 == 0):
                 print(f"{datetime.datetime.now()}: Iteration: {i}/{len(train_loader)}")
@@ -87,13 +93,30 @@ def train(hyperparams: utils.HyperParameters, model: MORSpyMaster, train_loader:
             neg_embeddings = neg_embeddings.to(device)
             neut_embeddings = neut_embeddings.to(device)
             assas_embeddings = assas_embeddings.to(device)
-
-            # Randomly remove words from the board 
-            if hyperparams.dynamic_board:
-                pos_embeddings = utils.slice_board_embeddings(pos_embeddings)
-                neg_embeddings = utils.slice_board_embeddings(neg_embeddings)
-                neut_embeddings = utils.slice_board_embeddings(neut_embeddings)
+            if (counter == 0):
+                pos_num = random.randint(1, pos_embeddings.shape[1])
+                neg_num = random.randint(1, neg_embeddings.shape[1])
+                neut_num = random.randint(1, neut_embeddings.shape[1])
             
+            # Randomly remove words from the board 
+            if hprams.dynamic_board:
+                pos_embeddings = pos_embeddings[:, :pos_num, :]
+                neg_embeddings = neg_embeddings[:, :neg_num, :]
+                neut_embeddings = neut_embeddings[:, :neut_num, :]
+            
+            counter += 1
+            if not hprams.burst_counter:
+                continue
+
+            if (counter == 4):
+                pos_num = pos_embeddings.shape[1]
+                neg_num = neg_embeddings.shape[1]
+                neut_num = neut_embeddings.shape[1]
+
+            if (counter >= 10):
+                counter = 0
+            
+
             optimizer.zero_grad()
             model_out, search_out, search_out_max, search_out_min = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
 
@@ -152,15 +175,15 @@ def main(args):
     # Initialize model
     backbone_name = hpram.backbone
     if (backbone_name == "all-mpnet-base-v2"):
-        model = MORSpyMPNet(vector_db, device, neutral_weight=hpram.neut_weight, negative_weight=hpram.neg_weight, assas_weights=hpram.assas_weight, vocab_size=hpram.vocab_size)
+        model = MORSpyMPNet(vector_db, device, neutral_weight=hpram.neut_weight, negative_weight=hpram.neg_weight, assas_weights=hpram.assas_weight, vocab_size=hpram.search_window)
     elif (backbone_name == "all-MiniLM-L6-v2"):
-        model = MORSpyMiniLM(vector_db, device, neutral_weight=hpram.neut_weight, negative_weight=hpram.neg_weight, assas_weights=hpram.assas_weight, vocab_size=hpram.vocab_size)
+        model = MORSpyMiniLM(vector_db, device, neutral_weight=hpram.neut_weight, negative_weight=hpram.neg_weight, assas_weights=hpram.assas_weight, vocab_size=hpram.search_window)
     else:
-        model = MORSpyMaster(vector_db, device, neutral_weight=hpram.neut_weight, negative_weight=hpram.neg_weight, assas_weights=hpram.assas_weight, vocab_size=hpram.vocab_size)
+        model = MORSpyMaster(vector_db, device, neutral_weight=hpram.neut_weight, negative_weight=hpram.neg_weight, assas_weights=hpram.assas_weight, vocab_size=hpram.search_window)
     
     model.to(device)
 
-    logger = train(hyperparams=hpram, model=model, train_loader=train_dataloader, valid_loader=valid_dataloader, device=device, normalize_reward=normalize_reward)
+    logger = train(hprams=hpram, model=model, train_loader=train_dataloader, valid_loader=valid_dataloader, device=device, normalize_reward=normalize_reward)
     
     # Save log results
     logger.save_results(args.dir)
@@ -184,15 +207,15 @@ if __name__ == "__main__":
 
     parser.add_argument('-vocab_dir', type=str, help="Vocab directory for sentences dataset", default=BASE_DIR + "data/news_vocab.json")
     
-    parser.add_argument('-vocab', type=int, default=80)
+    parser.add_argument('-sw', type=int, help="Search Window for the model", default=80)
     parser.add_argument('-w_decay', type=float, default=0.1)
     parser.add_argument('-gamma', type=float, default=0.9)
     parser.add_argument('-m_marg', type=float, default=0.7)
     parser.add_argument('-s_marg', type=float, default=0.8)
     parser.add_argument('-lr', type=float, default=0.00001)
-    parser.add_argument('-bias', type=str, help="Whether to add bias between the layers[Y/n]", default="Y")
-    parser.add_argument('-sep', type=str, help="Seperator token used for seperating texts in the dataset, default <SEP>", default=' ')
 
+    parser.add_argument('-bias', type=str, help="Whether to add bias between the layers[Y/n]", default="Y")
+    parser.add_argument('-sep', type=str, help="Seperator token used for seperating texts in the dataset, recent models use <SEP> as the seperator token", default=' ')
     parser.add_argument('-prune_search', type=str, help="Prunes the search window based on average similarity [Y/n]", default='N')
     parser.add_argument('-use_model_out', type=str, help="Determines whether to use the model output for scoring or the search output (highest scoring word embedding) [Y/n]", default='N')
     parser.add_argument('-sentences', type=str, help="Whether the model is being trained on longer texts [Y/n]", default='N')
@@ -202,10 +225,10 @@ if __name__ == "__main__":
     parser.add_argument('-assas_weight', type=float, default=-10.0)
     parser.add_argument('-norm', type=str, help="Whether to normalize reward function, [Y/n]", default='Y')
     
-    parser.add_argument('-cuda', type=str, help="Whether to use CPU or Cuda, use Y or N", default='Y')
+    parser.add_argument('-cuda', type=str, help="Whether to use CPU or Cuda, use [Y/n]", default='Y')
     parser.add_argument('-dir', type=str, help="Directory to save all results of the model", default=BASE_DIR + "model_data/testing/")
-    parser.add_argument('-name', type=str, help="Name of Model", default="test")
+    parser.add_argument('-name', type=str, help="Name of Model", default="model")
     parser.add_argument('-backbone', type=str, help="Encoder backbone: determines the size of the search head, dependent on size of embeddings", default='all-mpnet-base-v2')
-    parser.add_argument('-dynamic_board', type=str, help="Makes each batch have a different board: [Y/n]", default='n')
+    parser.add_argument('-dynamic_board', type=str, help="Enable to cause for the random removal of words from the game board for every batch (simulates different board states): [Y/n]", default='n')
     args = parser.parse_args()
     main(args)
