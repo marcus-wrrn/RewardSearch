@@ -105,19 +105,6 @@ def train(hprams: HyperParameters, model: MORSpyMaster, train_loader: DataLoader
                 neg_embeddings = neg_embeddings[:, :neg_num, :]
                 neut_embeddings = neut_embeddings[:, :neut_num, :]
             
-            counter += 1
-            if not hprams.burst_counter:
-                continue
-
-            if (counter == 4):
-                pos_num = pos_embeddings.shape[1]
-                neg_num = neg_embeddings.shape[1]
-                neut_num = neut_embeddings.shape[1]
-
-            if (counter >= 10):
-                counter = 0
-            
-
             optimizer.zero_grad()
             model_out, search_out, search_out_max, search_out_min = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
 
@@ -130,6 +117,18 @@ def train(hprams: HyperParameters, model: MORSpyMaster, train_loader: DataLoader
             train_logger_search.update_loss(loss)
             loss.backward()
             optimizer.step()
+
+            # Increment counter
+            counter += 1
+
+            # If burst counter is being used reset the board size to the max size
+            if (counter == 4) and not hprams.burst_counter:
+                pos_num = pos_embeddings.shape[1]
+                neg_num = neg_embeddings.shape[1]
+                neut_num = neut_embeddings.shape[1]
+
+            if (counter >= 10):
+                counter = 0
             
         scheduler.step()
         
