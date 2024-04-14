@@ -24,6 +24,7 @@ class MORSpyMaster(nn.Module):
     """
     def __init__(self, vocab: VectorSearch, device: torch.device, neutral_weight=1.0, negative_weight=0.0, assas_weights=-10.0, vocab_size=80, search_pruning=False, bias=True):
         super().__init__()
+        
         self.vocab_size = vocab_size
 
         self.neut_weight = neutral_weight
@@ -42,8 +43,13 @@ class MORSpyMaster(nn.Module):
         self.device = device
 
         self.search_pruning = search_pruning
+    
+    def update_weights(self, neg_weight: float, neut_weight: float, assas_weight: float):
+        self.neg_weight = neg_weight
+        self.neut_weight = neut_weight
+        self.assas_weights = assas_weight
 
-    def _process_embeddings(self, embs: Tensor):
+    def _cluster_embeddings(self, embs: Tensor):
         """Mean pool and normalize all embeddings"""
         out = torch.mean(embs,dim=1)
         out = F.normalize(out, p=2, dim=1)
@@ -122,8 +128,8 @@ class MORSpyMaster(nn.Module):
         embeddings_max = torch.gather(word_embeddings, 1, index_max.unsqueeze(-1).expand(-1, -1, word_embeddings.shape[2]))
         embeddings_min = torch.gather(word_embeddings, 1, index_min.unsqueeze(-1).expand(-1, -1, word_embeddings.shape[2]))
 
-        max_embeddings_pooled = self._process_embeddings(embeddings_max)
-        min_embeddings_pooled = self._process_embeddings(embeddings_min)
+        max_embeddings_pooled = self._cluster_embeddings(embeddings_max)
+        min_embeddings_pooled = self._cluster_embeddings(embeddings_min)
 
         # Highest scoring word embedding
         highest_scoring_embedding = embeddings_max[:, 0]
@@ -144,13 +150,13 @@ class MORSpyMaster(nn.Module):
         return self._find_scored_embeddings(tot_reward, word_embeddings)
 
     def _get_combined_input(self, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assas_emb: Tensor) -> Tensor:
-        neg_emb = self._process_embeddings(neg_embs)
-        neut_emb = self._process_embeddings(neut_embs)
-        pos_emb = self._process_embeddings(pos_embs)
+        neg_emb = self._cluster_embeddings(neg_embs)
+        neut_emb = self._cluster_embeddings(neut_embs)
+        pos_emb = self._cluster_embeddings(pos_embs)
 
         return torch.cat((neg_emb, assas_emb, neut_emb, pos_emb), dim=1)
     
-    def _convert_word_embeddings_to_tensor(self, embs: Tensor):
+    def _convert_text_embeddings_to_tensor(self, embs: Tensor):
         return torch.tensor(embs).to(self.device).squeeze(1)
 
     def forward(self, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assas_emb: Tensor) -> MOROutObj | tuple:
@@ -161,7 +167,7 @@ class MORSpyMaster(nn.Module):
 
         # ANN Search
         words, word_embeddings, dist = self.vocab.search(model_out, num_results=self.vocab_size)
-        word_embeddings = self._convert_word_embeddings_to_tensor(word_embeddings)
+        word_embeddings = self._convert_text_embeddings_to_tensor(word_embeddings)
 
         if self.search_pruning:
             self._prune_word_embeddings(word_embeddings, model_out)
@@ -209,20 +215,22 @@ class MORSpyIntegratedRewards(MORSpyMaster):
     def __init__(self, vocab: VectorSearch, device: device, neutral_weight=1, negative_weight=0, assas_weights=-10, vocab_size=80, search_pruning=False, bias=True):
         super().__init__(vocab, device, neutral_weight, negative_weight, assas_weights, vocab_size, search_pruning, bias)
 
-        self.reward_connection = nn.Sequential(
-            nn.Linear(3, 200, bias=True),
-            nn.Tanh(),  
-            nn.Linear(200, 500, bias=True),
-            nn.Tanh(),
-            nn.Linear(500, 1500, bias=True)
-        )
+        # self.reward_connection = nn.Sequential(
+        #     nn.Linear(3, 200, bias=True),
+        #     nn.Tanh(),  
+        #     nn.Linear(200, 500, bias=True),
+        #     nn.Tanh(),
+        #     nn.Linear(500, 1500, bias=True)
+        # )
 
         self.fc = nn.Sequential(
-            nn.Linear(3072, 5000, bias=bias),
+            nn.Linear(3075, 5000, bias=bias),
             nn.Tanh(),
             nn.Linear(5000, 2500, bias=bias),
             nn.Tanh(),
-            nn.Linear(2500, 1500, bias=bias)
+            nn.Linear(2500, 1500, bias=bias),
+            nn.Tanh(),
+            nn.Linear(1500, 768, bias=bias)
         )
 
         self.fin_layer = nn.Sequential(
@@ -244,24 +252,19 @@ class MORSpyIntegratedRewards(MORSpyMaster):
     def normed_assas(self):
         return self.assas_weight / self.norm_divisor
 
-    def update_weights(self, neg_weight: float, neut_weight: float, assas_weight: float):
-        self.neg_weight = neg_weight
-        self.neut_weight = neut_weight
-        self.assas_weights = assas_weight
+    
     
     def forward(self, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assas_emb: Tensor) -> MOROutObj | tuple:
         concatenated = self._get_combined_input(pos_embs, neg_embs, neut_embs, assas_emb)
-        first_out = self.fc(concatenated)
-        reward_out = self.reward_connection(self.normed_neg, self.normed_neut, self.normed_assas)
-        # Combine rewards 
-        comb_out = first_out + reward_out
-        model_out = self.fin_layer(comb_out)
+        connection = torch.Tensor([[self.normed_neut, self.normed_neg, self.normed_assas]]).to(self.device).expand(pos_embs.shape[0], -1)
+        concatenated = torch.cat((concatenated, connection), dim=1)
+        model_out = self.fc(concatenated)
 
         model_out = F.normalize(model_out, p=2, dim=1)
 
         # ANN Search
         words, word_embeddings, dist = self.vocab.search(model_out, num_results=self.vocab_size)
-        word_embeddings = self._convert_word_embeddings_to_tensor(word_embeddings)
+        word_embeddings = self._convert_text_embeddings_to_tensor(word_embeddings)
 
         if self.search_pruning:
             self._prune_word_embeddings(word_embeddings, model_out)

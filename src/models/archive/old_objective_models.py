@@ -32,7 +32,7 @@ class MORSpyDualHead(MORSpyMaster):
 
         embeddings_max = torch.gather(word_embeddings, 1, index_max.unsqueeze(-1).expand(-1, -1, word_embeddings.shape[2]))
 
-        max_embeddings_pooled = self._process_embeddings(embeddings_max)
+        max_embeddings_pooled = self._cluster_embeddings(embeddings_max)
 
         # Highest scoring word embedding
         highest_scoring_embedding = embeddings_max[:, 0]
@@ -64,10 +64,10 @@ class MORSpyDualHead(MORSpyMaster):
 
         # ANN Search
         pos_words, pos_word_embeddings, _ = self.vocab.search(model_out_pos, num_results=self.vocab_size)
-        pos_word_embeddings = self._convert_word_embeddings_to_tensor(pos_word_embeddings)
+        pos_word_embeddings = self._convert_text_embeddings_to_tensor(pos_word_embeddings)
 
         neg_words, neg_word_embeddings, _ = self.vocab.search(model_out_neg, num_results=self.vocab_size)
-        neg_word_embeddings = self._convert_word_embeddings_to_tensor(neg_word_embeddings)
+        neg_word_embeddings = self._convert_text_embeddings_to_tensor(neg_word_embeddings)
 
         # Scoring
         pos_search_out, pos_search_out_index, pos_embedding_pooled = self.find_search_embeddings(pos_word_embeddings, pos_embs, neg_embs, neut_embs, assas_emb, reverse=False)
