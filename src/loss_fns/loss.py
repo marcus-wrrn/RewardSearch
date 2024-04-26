@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from torch.distributions import Normal
 import numpy as np
 from torch import Tensor
+from models.many_to_many import ManyOutObj
 
 def triplet_loss(out_embedding, pos_embeddings, neg_embeddings, margin=0):
     pos_sim = util.cos_sim(out_embedding, pos_embeddings)/len(pos_embeddings)
@@ -69,7 +70,7 @@ class RewardSearchLoss(RewardSearchLossSmall):
         return pos_score, neg_score, neutral_score, assassin_score
     
     def _calc_final_scores(self, pos_score: torch.Tensor, neg_score: torch.Tensor, neut_score: torch.Tensor, assas_score: torch.Tensor):
-        neg_score = torch.cat((neg_score, neut_score, assas_score), dim=1).mean(dim=1)
+        neg_score = torch.cat((neg_score, neut_score, assas_score), dim=1).mean(dim=1) 
         pos_score = pos_score.mean(dim=1)
 
         if self.exp_score:
@@ -88,7 +89,7 @@ class RewardSearchLoss(RewardSearchLossSmall):
 
         loss_search = F.triplet_margin_loss(model_out, search_max, search_min, margin=self.search_marg)
 
-        return loss_model + loss_search
+        return loss_model + np.e**(loss_search)
 
 class RewardSearchWithWassersteinLoss(RewardSearchLoss):
     def __init__(self, model_marg=0.2, search_marg=0.7, device='cpu', normalize=True, exp_score=False):
@@ -126,4 +127,49 @@ class KeypointTriangulationLoss(RewardSearchLoss):
         loss_negative = F.triplet_margin_loss(m_neg_out, s_neg_out, m_pos_out, margin=0.7)
 
         return p_topic_loss + loss_positive + loss_negative
+
+
+class MultiKeypointLoss(RewardSearchLoss):
+    def __init__(self, model_marg=0.2, search_marg=0.7, device='cpu', normalize=True, exp_score=False, num_heads=3):
+        super().__init__(model_marg, search_marg, device, normalize, exp_score)
+        self.num_heads = num_heads
     
+    def _cluster_embeddings(self, embs: Tensor, dim=1):
+        embs = embs.mean(dim=dim)
+        embs = F.normalize(embs, p=2, dim=dim)
+        return embs
+    
+    def forward(self, model_logits: list[ManyOutObj], pos_encs: Tensor, neg_encs: Tensor, neut_encs: Tensor, assas_encs: Tensor, backward=True):
+        # Pool positive embeddings
+        pos_cluster = self._cluster_embeddings(pos_encs)
+        assas_encs = assas_encs.unsqueeze(1)
+        neg_vals = torch.cat((neg_encs, neut_encs, assas_encs), dim=1).to(self.device)
+        neg_cluster = self._cluster_embeddings(neg_vals)
+
+        losses = []
+        for i, model_log in enumerate(model_logits):
+            stable_loss = F.triplet_margin_loss(model_log.model_out, pos_cluster, neg_cluster, margin=self.margin)
+            search_loss = F.triplet_margin_loss(model_log.model_out, model_log.max_embs_pooled, model_log.min_embs_pooled, margin=self.search_marg)
+            # Get the two different values
+            model_out1 = None
+            model_out2 = None
+            if i == 0:
+                model_out1 = model_logits[-1].model_out
+            else:
+                model_out1 = model_logits[i - 1].model_out
+            
+            if i == len(model_logits) - 1:
+                model_out2 = model_logits[0].model_out
+            else:
+                model_out2 = model_logits[i + 1].model_out
+            
+            dist_loss = F.triplet_margin_loss(model_log.model_out, model_out1, model_out2, margin=0.7)
+
+            total_loss = stable_loss + np.e**search_loss + dist_loss
+            if backward:
+                total_loss.backward(retain_graph=True)
+
+            losses.append(total_loss.mean())
+        
+        return losses
+

@@ -28,7 +28,7 @@ class ManyOutObj:
                  max_embs_pooled: 
                  Tensor, 
                  min_embs_pooled: Tensor) -> None:
-        self.h_score_embs = highest_scoring_embs
+        self.h_score_emb = highest_scoring_embs
         self.emb_ids = emb_idx
         self.embs = embeddings
         self.emb_scores = emb_scores
@@ -36,12 +36,16 @@ class ManyOutObj:
         self.min_embs_pooled = min_embs_pooled
         self.texts = None
         self.dists = None
+        self.model_out = None
     
     def add_text(self, texts: str):
         self.texts = texts
     
     def add_dist(self, dists: list):
         self.dists = dists
+
+    def add_model_out(self, out: Tensor):
+        self.model_out = out
 
 
 class MORSpyManyToThree(MORSpyMaster):
@@ -107,13 +111,14 @@ class MORSpyManyToThree(MORSpyMaster):
         out_obj = ManyOutObj(word_embeddings, tot_reward, highest_emb_scored, best_score_idx, max_embs_pooled, min_embs_pooled)
         return out_obj
 
-    def _rerank_and_process(self, hidden_layer: Tensor, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assas_embs: Tensor) -> ManyOutObj:
-        texts, embs, dist = self.vocab.search(hidden_layer, num_results=self.vocab_size)
+    def _rerank_and_process(self, model_out: Tensor, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assas_embs: Tensor) -> ManyOutObj:
+        texts, embs, dist = self.vocab.search(model_out, num_results=self.vocab_size)
         embs = torch.tensor(embs).to(self.device).squeeze(1)
         out_obj = self.find_search_embeddings(embs, pos_embs, neg_embs, neut_embs, assas_embs)
 
         out_obj.add_text(texts)
         out_obj.add_dist(dist)
+        out_obj.add_model_out(model_out)
         return out_obj
 
     def forward(self, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assas_emb: Tensor) -> list[ManyOutObj]:
@@ -123,6 +128,7 @@ class MORSpyManyToThree(MORSpyMaster):
         model_out1 = self.out_layer1(intermediary_out)
         model_out2 = self.out_layer2(intermediary_out)
         model_out3 = self.out_layer3(intermediary_out)
+        
 
         model_out1 = F.normalize(model_out1, p=2, dim=1)
         model_out2 = F.normalize(model_out2, p=2, dim=1)
