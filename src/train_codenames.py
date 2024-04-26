@@ -72,7 +72,7 @@ def train(hprams: HyperParameters, model: MORSpyMaster, train_loader: DataLoader
     print("Training")
     model.train()
 
-    train_logger = TrainLogger(hprams.n_epochs)
+    train_logger = TrainLogger()
 
     print(f"Starting training at: {datetime.datetime.now()}")
     for epoch in range(1, hprams.n_epochs + 1):
@@ -94,12 +94,14 @@ def train(hprams: HyperParameters, model: MORSpyMaster, train_loader: DataLoader
             neg_embeddings = neg_embeddings.to(device)
             neut_embeddings = neut_embeddings.to(device)
             assas_embeddings = assas_embeddings.to(device)
+
+            # Find number of texts to remove from the board
             if (counter == 0):
                 pos_num = random.randint(1, pos_embeddings.shape[1])
                 neg_num = random.randint(1, neg_embeddings.shape[1])
                 neut_num = random.randint(1, neut_embeddings.shape[1])
             
-            # Randomly remove words from the board 
+            # Remove texts from the board                                  
             if hprams.dynamic_board:
                 pos_embeddings = pos_embeddings[:, :pos_num, :]
                 neg_embeddings = neg_embeddings[:, :neg_num, :]
@@ -122,10 +124,10 @@ def train(hprams: HyperParameters, model: MORSpyMaster, train_loader: DataLoader
             counter += 1
 
             # If burst counter is being used reset the board size to the max size
-            if (counter == 4) and not hprams.burst_counter:
-                pos_num = pos_embeddings.shape[1]
-                neg_num = neg_embeddings.shape[1]
-                neut_num = neut_embeddings.shape[1]
+            # if (counter == 4) and hprams.burst_counter:
+            #     pos_num = pos_embeddings.shape[1]
+            #     neg_num = neg_embeddings.shape[1]
+            #     neut_num = neut_embeddings.shape[1]
 
             if (counter >= 10):
                 counter = 0
@@ -171,6 +173,7 @@ def main(args):
 
     print(f"Training Length: {len(train_dataset)}")
     vector_db = VectorSearch(train_dataset, prune=True, n_dim=hpram.emb_size)
+    vector_db.save_index(f"{BASE_DIR}data/example.index")
 
     # Initialize model
     backbone_name = hpram.backbone
@@ -201,7 +204,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-e', type=int, help="Number of epochs", default=10)
     parser.add_argument('-b', type=int, help="Batch Size", default=500)
-    parser.add_argument('-code_data', type=str, help="Codenames dataset path", default=BASE_DIR + "data/words.json")
+    parser.add_argument('-code_data', type=str, help="Codenames dataset path", default=BASE_DIR + "data/words_extended.json")
     parser.add_argument('-guess_data', type=str, help="Geuss words dataset path", default=BASE_DIR + "data/codewords_full_w_assassin_valid.json")
     parser.add_argument('-val_guess_data', type=str, help="Filepath for the validation dataset", default=BASE_DIR + "data/codewords_full_w_assassin_mini.json")
 
