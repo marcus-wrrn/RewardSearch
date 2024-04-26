@@ -173,7 +173,6 @@ def main(args):
 
     print(f"Training Length: {len(train_dataset)}")
     vector_db = VectorSearch(train_dataset, prune=True, n_dim=hpram.emb_size)
-    vector_db.save_index(f"{BASE_DIR}data/example.index")
 
     # Initialize model
     backbone_name = hpram.backbone
@@ -204,7 +203,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-e', type=int, help="Number of epochs", default=10)
     parser.add_argument('-b', type=int, help="Batch Size", default=500)
-    parser.add_argument('-code_data', type=str, help="Codenames dataset path", default=BASE_DIR + "data/words_extended.json")
+    parser.add_argument('-code_data', type=str, help="Codenames dataset path", default=BASE_DIR + "data/words.json")
     parser.add_argument('-guess_data', type=str, help="Geuss words dataset path", default=BASE_DIR + "data/codewords_full_w_assassin_valid.json")
     parser.add_argument('-val_guess_data', type=str, help="Filepath for the validation dataset", default=BASE_DIR + "data/codewords_full_w_assassin_mini.json")
 
