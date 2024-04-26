@@ -11,7 +11,7 @@ from utils.vector_search import VectorSearch
 from utils.hidden_vars import BASE_DIR
 import utils.utilities as utils
 from utils.hyperparameters import HyperParameters
-from utils.logger import EpochLogger, TrainLogger
+from utils.logger import TrainLoggerMany, EpochLoggerCombined
 import random
 
 # This is the main Codenames Model with the best recorded performance -> main training script
@@ -42,41 +42,38 @@ class LossResults:
         return f"Positive: {self.tot_pos/self.size}, Negative: {self.tot_neg/self.size}, Neutral: {self.tot_neut/self.size}"
 
 @torch.no_grad()
-def validate(model: MORSpyManyToThree, valid_loader: DataLoader, loss_fn: MultiKeypointLoss, device: torch.device):
-    val_logger_search = EpochLogger(len(valid_loader.dataset), len(valid_loader), device=device, name="Validation Search")
-    val_logger_model = EpochLogger(len(valid_loader.dataset), len(valid_loader), device=device, name="Validation Model")
-
+def validate(model: MORSpyManyToThree, valid_loader: DataLoader, loss_fn: MultiKeypointLoss, device: torch.device) -> list[EpochLoggerCombined]:
+    val_logger = [EpochLoggerCombined(len(valid_loader.dataset), len(valid_loader), device=device, name_model=f"Validation Head {i + 1} Model", name_search=f"Validation Head {i + 1} Search") for i in range(3)]
+    counter = 0
     for i, data in enumerate(valid_loader, 0):
         pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings = data[1]
         pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings = pos_embeddings.to(device), neg_embeddings.to(device), neut_embeddings.to(device), assas_embeddings.to(device)
 
-        model_out, search_out, search_out_max, search_out_min = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+        model_logits = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
 
-        loss = loss_fn(model_out, search_out_max, search_out_min, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+        loss = loss_fn(model_logits, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings, backward=False)
         
-        val_logger_search.update_results(search_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
-        val_logger_search.update_loss(loss)
-
-        val_logger_model.update_results(model_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
-        val_logger_model.update_loss(loss)
+        for j in range(3):
+            val_logger[j].update_results(model_logits[j].model_out, model_logits[j].h_score_emb, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+            val_logger[j].update_loss(loss[j])
         
+        counter += 1
 
-    return val_logger_model, val_logger_search
+    return val_logger
 
-def train(hprams: HyperParameters, model: MORSpyManyToThree, train_loader: DataLoader, valid_loader: DataLoader, device: torch.device, normalize_reward: bool) -> TrainLogger:
+def train(hprams: HyperParameters, model: MORSpyManyToThree, train_loader: DataLoader, valid_loader: DataLoader, device: torch.device, normalize_reward: bool) -> TrainLoggerMany:
 
     loss_fn, optimizer, scheduler = init_hyperparameters(hprams, model, device, normalize_reward)
     print("Training")
     model.train()
 
-    train_logger = TrainLogger(hprams.n_epochs)
-
+    train_logger = TrainLoggerMany()
     print(f"Starting training at: {datetime.datetime.now()}")
     for epoch in range(1, hprams.n_epochs + 1):
         print(f"Epoch: {epoch}")
-        train_logger_search = EpochLogger(len(train_loader.dataset), len(train_loader), device=device, name="Training Search")
-        train_logger_model = EpochLogger(len(train_loader.dataset), len(train_loader), device=device, name="Training Model")
+        epoch_logger = [EpochLoggerCombined(len(train_loader.dataset), len(train_loader), device=device, name_model=f"Training Head {j + 1} Model", name_search=f"Training Head {j + 1} Search") for j in range(3)]
 
+        counter = 0
         for i, data in enumerate(train_loader, 0):
             if (i % 100 == 0):
                 print(f"{datetime.datetime.now()}: Iteration: {i}/{len(train_loader)}")
@@ -105,12 +102,10 @@ def train(hprams: HyperParameters, model: MORSpyManyToThree, train_loader: DataL
 
             loss = loss_fn(model_logits, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
             
-            #train_logger_model.update_results(model_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
-            #train_logger_search.update_results(search_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
-
-            train_logger_model.update_loss(loss)
-            train_logger_search.update_loss(loss)
-            loss.backward()
+            for j in range(3):
+                epoch_logger[j].update_results(model_logits[j].model_out, model_logits[j].h_score_emb, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+                epoch_logger[j].update_loss(loss[j])
+            #loss.backward()
             optimizer.step()
 
             # Increment counter
@@ -124,16 +119,15 @@ def train(hprams: HyperParameters, model: MORSpyManyToThree, train_loader: DataL
         scheduler.step()
         
         # Validate model output
-        valid_logger_model, valid_logger_search = validate(model, valid_loader, loss_fn, device)
-        train_logger.add_loggers(train_logger_model, train_logger_search, valid_logger_model, valid_logger_search)
+        valid_logger = validate(model, valid_loader, loss_fn, device)
+        train_logger.add_loggers(epoch_logger, valid_logger)
 
-        # TODO: Implement this in the train logger object
         print()
-        train_logger_model.print_log()
-        train_logger_search.print_log()
-        
-        valid_logger_model.print_log()
-        valid_logger_search.print_log()
+        for i in range(3):
+            epoch_logger[i].print_log()
+        print(f"========================================================================================")
+        for i in range(3):
+            valid_logger[i].print_log()
     
     return train_logger
 
@@ -170,7 +164,7 @@ def main(args):
     logger = train(hprams=hpram, model=model, train_loader=train_dataloader, valid_loader=valid_dataloader, device=device, normalize_reward=normalize_reward)
     
     # Save log results
-    logger.save_results(args.dir)
+    #logger.save_results(args.dir)
 
     # Save model information
     model_path = args.dir + args.name + ".pth"
@@ -199,8 +193,8 @@ if __name__ == "__main__":
     parser.add_argument('-lr', type=float, default=0.00001)
 
     parser.add_argument('-bias', type=str, help="Whether to add bias between the layers[Y/n]", default="Y")
-    parser.add_argument('-sep', type=str, help="Seperator token used for seperating texts in the dataset, recent models use <SEP> as the seperator token", default=' ')
-    parser.add_argument('-prune_search', type=str, help="Prunes the search window based on average similarity [Y/n]", default='N')
+    parser.add_argument('-sep', type=str, help="Seperator token used for seperating texts in the dataset, recent models/datasets use <SEP> as the seperator token", default=' ')
+    parser.add_argument('-prune_search', type=str, help="Prunes the search window based on average similarity (Does not work) [Y/n]", default='N')
     parser.add_argument('-use_model_out', type=str, help="Determines whether to use the model output for scoring or the search output (highest scoring word embedding) [Y/n]", default='N')
     parser.add_argument('-sentences', type=str, help="Whether the model is being trained on longer texts [Y/n]", default='N')
     

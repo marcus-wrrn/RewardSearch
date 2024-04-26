@@ -6,6 +6,7 @@ import json
 import os
 
 class EpochLogger:
+    """Logs the result of the codenames model for each epoch, used to record all important information during model training"""
     def __init__(self, data_size: int, batch_size: int, num_targets=9, device='cpu', name="Training"):
         self.name = name
         self.total_loss = 0.0
@@ -50,8 +51,6 @@ class EpochLogger:
         self.neut_sum += neut_sum.item()
         self.assas_sum += assas_sum.item()
 
-        
-
     def to_string(self):
         out_str = f"{self.name} Log\n"
         out_str += f"Loss: {self.avg_loss}, Target Selection: {self.avg_target_perc}\n"
@@ -63,9 +62,34 @@ class EpochLogger:
         output = self.to_string()
         print(output)
 
+class EpochLoggerCombined:
+    def __init__(self, data_size: int, batch_size: int, num_targets=9, device='cpu', name_model="Model", name_search="Search") -> None:
+        self.log_model = EpochLogger(data_size=data_size, batch_size=batch_size, num_targets=num_targets, device=device, name=name_model)
+        self.log_search = EpochLogger(data_size=data_size, batch_size=batch_size, num_targets=num_targets, device=device, name=name_search)
+    
+    def update_results(self, 
+                       model_out: Tensor, 
+                       search_out: Tensor, 
+                       pos_emb: Tensor, 
+                       neg_emb: Tensor, 
+                       neut_emb: Tensor, 
+                       assas_emb: Tensor):
+        self.log_model.update_results(model_out, pos_emb, neg_emb, neut_emb, assas_emb)
+        self.log_search.update_results(search_out, pos_emb, neg_emb, neut_emb, assas_emb)
+    
+    def update_loss(self, loss: Tensor):
+        self.log_model.update_loss(loss)
+        self.log_search.update_loss(loss)
+    
+    def print_log(self):
+        output_model = self.log_model.to_string()
+        print(output_model)
+
+        output_search = self.log_search.to_string()
+        print(output_search)
 
 class TrainLogger:
-    def __init__(self, num_epochs: int) -> None:
+    def __init__(self) -> None:
         self.train_loggers_model = []
         self.train_loggers_search = []
 
@@ -123,7 +147,17 @@ class TrainLogger:
         with open(valid_path, 'w') as file:
             json.dump(obj, file)
 
+class TrainLoggerMany:
+    def __init__(self) -> None:
+        self.epoch_loggers_train = []
+        self.epoch_loggers_valid = []
+    
+    def add_loggers(self, train_log: list[EpochLoggerCombined], valid_log: list[EpochLoggerCombined]):
+        self.epoch_loggers_train.append(train_log)
+        self.epoch_loggers_valid.append(valid_log)
 
+
+    
 class TestLogger(EpochLogger):
     def __init__(self, data_size: int, batch_size: int, device='cpu', name="Training"):
         super().__init__(data_size, batch_size, device=device, name=name)
