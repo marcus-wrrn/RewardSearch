@@ -139,3 +139,24 @@ class MORSpyManyToThree(MORSpyMaster):
         out3 = self._rerank_and_process(model_out3, pos_embs, neg_embs, neut_embs, assas_emb)
 
         return [out1, out2, out3]
+    
+
+class MORSpyManyPooled(MORSpyManyToThree):
+    def __init__(self, vocab: VectorSearch, device: device, neutral_weight=1, negative_weight=0, assassin_weights=-10, vocab_size=80, search_pruning=False):
+        super().__init__(vocab, device, neutral_weight, negative_weight, assassin_weights, vocab_size, search_pruning)
+
+    def forward(self, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assas_emb: Tensor):
+        concatenated = self._get_combined_input(pos_embs, neg_embs, neut_embs, assas_emb)
+        intermediary_out = self.fc(concatenated)
+        
+        model_out1 = self.out_layer1(intermediary_out)
+        model_out2 = self.out_layer2(intermediary_out)
+        model_out3 = self.out_layer3(intermediary_out)
+        
+        # Cluster embeddings together
+        model_out_stacked = torch.stack((model_out1, model_out2, model_out3), dim=1)
+        model_out_pooled = torch.mean(model_out_stacked, dim=1)
+        model_out_pooled = F.normalize(model_out_pooled, p=2, dim=1)
+
+        out = self._rerank_and_process(model_out_pooled, pos_embs, neg_embs, neut_embs, assas_emb)
+        return out, model_out_stacked

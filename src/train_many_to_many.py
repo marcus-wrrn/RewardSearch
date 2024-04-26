@@ -1,8 +1,8 @@
 import torch
 from torch.optim.lr_scheduler import ExponentialLR
-from loss_fns.loss import MultiKeypointLoss
+from loss_fns.loss import MultiKeypointLoss, MultiKeypointLossPooled
 from torch.utils.data import DataLoader
-from models.many_to_many import MORSpyManyToThree
+from models.many_to_many import MORSpyManyToThree, MORSpyManyPooled
 from datasets.dataset import CodeNamesDataset, SentenceNamesDataset
 import datetime
 import argparse
@@ -11,13 +11,11 @@ from utils.vector_search import VectorSearch
 from utils.hidden_vars import BASE_DIR
 import utils.utilities as utils
 from utils.hyperparameters import HyperParameters
-from utils.logger import TrainLoggerMany, EpochLoggerCombined
-import random
+from utils.logger import TrainLogger, EpochLoggerCombined
+import random 
 
-# This is the main Codenames Model with the best recorded performance -> main training script
-
-def init_hyperparameters(hp: HyperParameters, model: MORSpyManyToThree, device, normalize_reward):
-    loss_fn = MultiKeypointLoss(model_marg=hp.model_marg, search_marg=hp.search_marg, device=device, normalize=normalize_reward, num_heads=3)
+def init_hyperparameters(hp: HyperParameters, model: MORSpyManyPooled, device, normalize_reward):
+    loss_fn = MultiKeypointLossPooled(model_marg=hp.model_marg, search_marg=hp.search_marg, device=device, normalize=normalize_reward, num_heads=3, emb_marg=0.7)
     optimizer = torch.optim.AdamW(model.parameters(), lr=hp.learning_rate, weight_decay=hp.weight_decay)
     scheduler = ExponentialLR(optimizer, gamma=hp.gamma)
     return loss_fn, optimizer, scheduler
@@ -42,38 +40,36 @@ class LossResults:
         return f"Positive: {self.tot_pos/self.size}, Negative: {self.tot_neg/self.size}, Neutral: {self.tot_neut/self.size}"
 
 @torch.no_grad()
-def validate(model: MORSpyManyToThree, valid_loader: DataLoader, loss_fn: MultiKeypointLoss, device: torch.device) -> list[EpochLoggerCombined]:
-    val_logger = [EpochLoggerCombined(len(valid_loader.dataset), len(valid_loader), device=device, name_model=f"Validation Head {i + 1} Model", name_search=f"Validation Head {i + 1} Search") for i in range(3)]
+def validate(model: MORSpyManyToThree, valid_loader: DataLoader, loss_fn: MultiKeypointLoss, device: torch.device) -> EpochLoggerCombined:
+    val_logger = EpochLoggerCombined(len(valid_loader.dataset), len(valid_loader), device=device, name_model="Validation Model", name_search="Validation Search")
     counter = 0
     for i, data in enumerate(valid_loader, 0):
         pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings = data[1]
         pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings = pos_embeddings.to(device), neg_embeddings.to(device), neut_embeddings.to(device), assas_embeddings.to(device)
 
-        model_logits = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+        model_logits, tri_out = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
 
-        loss = loss_fn(model_logits, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings, backward=False)
+        loss = loss_fn(model_logits, tri_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
         
-        for j in range(3):
-            val_logger[j].update_results(model_logits[j].model_out, model_logits[j].h_score_emb, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
-            val_logger[j].update_loss(loss[j])
+        val_logger.update_results(model_logits.model_out, model_logits.h_score_emb, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+        val_logger.update_loss(loss)
         
         counter += 1
 
     return val_logger
 
-def train(hprams: HyperParameters, model: MORSpyManyToThree, train_loader: DataLoader, valid_loader: DataLoader, device: torch.device, normalize_reward: bool) -> TrainLoggerMany:
+def train(hprams: HyperParameters, model: MORSpyManyPooled, train_loader: DataLoader, valid_loader: DataLoader, device: torch.device, normalize_reward: bool) -> TrainLogger:
 
     loss_fn, optimizer, scheduler = init_hyperparameters(hprams, model, device, normalize_reward)
     print("Training")
     model.train()
 
-    train_logger = TrainLoggerMany()
+    train_logger = TrainLogger()
     print(f"Starting training at: {datetime.datetime.now()}")
     for epoch in range(1, hprams.n_epochs + 1):
         print(f"Epoch: {epoch}")
-        epoch_logger = [EpochLoggerCombined(len(train_loader.dataset), len(train_loader), device=device, name_model=f"Training Head {j + 1} Model", name_search=f"Training Head {j + 1} Search") for j in range(3)]
+        epoch_logger = EpochLoggerCombined(len(train_loader.dataset), len(train_loader), device=device, name_model="Train Model", name_search="Train Search")
 
-        counter = 0
         for i, data in enumerate(train_loader, 0):
             if (i % 100 == 0):
                 print(f"{datetime.datetime.now()}: Iteration: {i}/{len(train_loader)}")
@@ -86,7 +82,7 @@ def train(hprams: HyperParameters, model: MORSpyManyToThree, train_loader: DataL
             assas_embeddings = assas_embeddings.to(device)
 
             # Find number of texts to remove from the board
-            if (hprams.dynamic_board and counter == 0):
+            if (hprams.dynamic_board):
                 # Initialize random values to remove
                 pos_num = random.randint(1, pos_embeddings.shape[1])
                 neg_num = random.randint(1, neg_embeddings.shape[1])
@@ -98,23 +94,15 @@ def train(hprams: HyperParameters, model: MORSpyManyToThree, train_loader: DataL
                 neut_embeddings = neut_embeddings[:, :neut_num, :]
             
             optimizer.zero_grad()
-            model_logits = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+            model_logits, tri_out = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
 
-            loss = loss_fn(model_logits, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
-            
-            for j in range(3):
-                epoch_logger[j].update_results(model_logits[j].model_out, model_logits[j].h_score_emb, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
-                epoch_logger[j].update_loss(loss[j])
-            #loss.backward()
+            loss = loss_fn(model_logits, tri_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+            loss.backward()
+
+            epoch_logger.update_results(model_logits.model_out, model_logits.h_score_emb, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+            epoch_logger.update_loss(loss)
+
             optimizer.step()
-
-            # Increment counter
-            counter += 1
-
-            # If burst counter is being used reset the board size to the max size
-
-            if (counter >= 10):
-                counter = 0
             
         scheduler.step()
         
@@ -122,12 +110,10 @@ def train(hprams: HyperParameters, model: MORSpyManyToThree, train_loader: DataL
         valid_logger = validate(model, valid_loader, loss_fn, device)
         train_logger.add_loggers(epoch_logger, valid_logger)
 
-        print()
-        for i in range(3):
-            epoch_logger[i].print_log()
         print(f"========================================================================================")
-        for i in range(3):
-            valid_logger[i].print_log()
+        epoch_logger.print_log()
+        print(f"========================================================================================")
+        valid_logger.print_log()
     
     return train_logger
 
@@ -158,13 +144,13 @@ def main(args):
     vector_db = VectorSearch(train_dataset, prune=True, n_dim=hpram.emb_size)
 
     # Initialize model
-    model = MORSpyManyToThree(vector_db, device, neutral_weight=hpram.neut_weight, negative_weight=hpram.neg_weight, assassin_weights=hpram.assas_weight, vocab_size=hpram.search_window)
+    model = MORSpyManyPooled(vector_db, device, neutral_weight=hpram.neut_weight, negative_weight=hpram.neg_weight, assassin_weights=hpram.assas_weight, vocab_size=hpram.search_window)
     model.to(device)
 
     logger = train(hprams=hpram, model=model, train_loader=train_dataloader, valid_loader=valid_dataloader, device=device, normalize_reward=normalize_reward)
     
     # Save log results
-    #logger.save_results(args.dir)
+    logger.save_results(args.dir)
 
     # Save model information
     model_path = args.dir + args.name + ".pth"

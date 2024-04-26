@@ -33,3 +33,6 @@ class VectorSearch:
     def index_to_texts(self, index):
         return self.vocab_texts[index]
     
+    def save_index(self, filepath: str):
+        faiss.write_index(self.index, filepath)
+    

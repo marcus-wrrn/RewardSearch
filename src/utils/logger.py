@@ -26,7 +26,7 @@ class EpochLogger:
         self.count = 0
     
     @property
-    def avg_target_perc(self):
+    def targ_rate(self):
         return self.target_perc / self.count
     
     @property
@@ -35,8 +35,20 @@ class EpochLogger:
 
     @property
     def json(self) -> json:
-        obj = {"Avg Targets": self.avg_target_perc, "Neutral": self.neut_sum, "Negative": self.neg_sum, "Assassin": self.assas_sum, "Loss": self.avg_loss}
+        obj = {"Avg Targets": self.targ_rate, "Neutral": self.neut_sum, "Negative": self.neg_sum, "Assassin": self.assas_sum, "Loss": self.avg_loss}
         return json(obj)
+    
+    @property
+    def neut_rate(self) -> float:
+        return self.neut_sum / self.data_size
+
+    @property
+    def neg_rate(self) -> float:
+        return self.neg_sum / self.data_size
+    
+    @property
+    def assas_rate(self) -> float:
+        return self.assas_sum / self.data_size
     
     def update_loss(self, loss: Tensor):
         self.total_loss += loss.item()
@@ -53,7 +65,7 @@ class EpochLogger:
 
     def to_string(self):
         out_str = f"{self.name} Log\n"
-        out_str += f"Loss: {self.avg_loss}, Target Selection: {self.avg_target_perc}\n"
+        out_str += f"Loss: {self.avg_loss}, Target Selection: {self.targ_rate}\n"
         out_str += f"Neutral Guesses: {self.neut_sum}/{self.data_size}, Negative Guesses: {self.neg_sum}/{self.data_size}\n"        
         out_str += f"Assassin Guesses: {self.assas_sum}/{self.data_size}\n"
         return out_str
@@ -88,38 +100,55 @@ class EpochLoggerCombined:
         output_search = self.log_search.to_string()
         print(output_search)
 
+class LogInfo:
+    def __init__(self, name: str) -> None:
+        self.loss = []
+        self.targ_rate = []
+        self.neut_rate = []
+        self.neg_rate = []
+        self.assas_rate = []
+        self.name = name
+    
+    def update_log(self, logger: EpochLogger):
+        self.loss.append(logger.avg_loss)
+        self.targ_rate.append(logger.targ_rate)
+        self.neut_rate.append(logger.neut_rate)
+        self.neg_rate.append(logger.neg_rate)
+        self.assas_rate.append(logger.assas_rate)
+
+    def json(self):
+        obj = {"Name": self.name, 
+               "Loss": self.loss, 
+               "Target Rate": self.targ_rate, 
+               "Neutral Rate": self.neut_rate, 
+               "Negative Rate": self.neg_rate, 
+               "Assassin Rate": self.assas_rate
+               }
+        return obj
+
+
 class TrainLogger:
     def __init__(self) -> None:
-        self.train_loggers_model = []
-        self.train_loggers_search = []
-
-        self.valid_loggers_model = []
-        self.valid_loggers_search = []
+        self.train_loggers = []
+        self.valid_loggers = []
     
-    def add_loggers(self, tmodel_log, tsearch_log, vmodel_log, vsearch_log):
-        self.train_loggers_model.append(tmodel_log)
-        self.train_loggers_search.append(tsearch_log)
-        self.valid_loggers_model.append(vmodel_log)
-        self.valid_loggers_search.append(vsearch_log)
+    def add_loggers(self, train_log, val_log):
+        self.train_loggers.append(train_log)
+        self.valid_loggers.append(val_log)
 
-    def _combine_loggers(self, loggers: list[EpochLogger]):
-        loss = []
-        targ_rate = []
-        neut_rate = []
-        neg_rate = []
-        assas_rate = []
+    def _update_log(self, log: LogInfo, logger: EpochLogger):
+        log.loss.append(logger.avg_loss)
+
+
+    def _combine_loggers(self, loggers: list[EpochLoggerCombined]) -> tuple[LogInfo, LogInfo]:
+        model_log = LogInfo(loggers[0].log_model.name)
+        search_log = LogInfo(loggers[0].log_search.name)
 
         for logger in loggers:
-            loss.append(logger.avg_loss)
-
-            targ_rate.append(logger.avg_target_perc)
-            neut_rate.append(logger.neut_sum / logger.data_size)
-            neg_rate.append(logger.neg_sum / logger.data_size)
-            assas_rate.append(logger.assas_sum / logger.data_size)
+            model_log.update_log(logger.log_model)
+            search_log.update_log(logger.log_search)
         
-        # TODO: Fix scuffed name 
-        obj = {"Name": loggers[0].name, "Loss": loss, "Target Rate": targ_rate, "Neutral Rate": neut_rate, "Negative Rate": neg_rate, "Assassin Rate": assas_rate}
-        return obj
+        return model_log, search_log
 
     def save_results(self, directory: str):
         # Create directory if it does not exist
@@ -130,20 +159,17 @@ class TrainLogger:
 
         # Save train logs
         train_path = directory + "training.json"
+        train_model, train_search = self._combine_loggers(self.train_loggers)
 
-        train_model = self._combine_loggers(self.train_loggers_model)
-        train_search = self._combine_loggers(self.train_loggers_search)
-
-        obj = {"Model": train_model, "Search": train_search}
+        obj = {"Model": train_model.json(), "Search": train_search.json()}
         with open(train_path, 'w') as file:
             json.dump(obj, file)
         
         # Save validation logs
         valid_path = directory + "validation.json"
-        valid_model = self._combine_loggers(self.valid_loggers_model)
-        valid_search = self._combine_loggers(self.valid_loggers_search)
+        valid_model, valid_search = self._combine_loggers(self.valid_loggers)
 
-        obj = {"Model": valid_model, "Search": valid_search}
+        obj = {"Model": valid_model.json(), "Search": valid_search.json()}
         with open(valid_path, 'w') as file:
             json.dump(obj, file)
 
@@ -155,8 +181,6 @@ class TrainLoggerMany:
     def add_loggers(self, train_log: list[EpochLoggerCombined], valid_log: list[EpochLoggerCombined]):
         self.epoch_loggers_train.append(train_log)
         self.epoch_loggers_valid.append(valid_log)
-
-
     
 class TestLogger(EpochLogger):
     def __init__(self, data_size: int, batch_size: int, device='cpu', name="Training"):

@@ -10,3 +10,7 @@ python3 ./src/train_codenames.py -e 10 -b 500 -code_data "./data/words_extended.
 
 
 python3 ./src/train_codenames.py -e 10 -b 500 -code_data "./data/words_extended.json" -guess_data "./data/codewords_full_w_assassin_valid.json" -val_guess_data "./data/codewords_full_w_assassin_mini.json" -name "model" -dir "./model_data/mpnet_dynamic_board/" -backbone "all-mpnet-base-v2" -sep ' ' -dynamic_board Y
+
+
+# Many Board
+python3 ./src/train_many_to_many.py -e 10 -b 500 -code_data "./data/words_extended.json" -guess_data "./data/codewords_full_w_assassin_valid.json" -val_guess_data "./data/codewords_full_w_assassin_mini.json" -name "model" -dir "./model_data/many_test_one/" -backbone "all-mpnet-base-v2" -sep ' ' -dynamic_board Y

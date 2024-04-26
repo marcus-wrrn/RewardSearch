@@ -173,3 +173,49 @@ class MultiKeypointLoss(RewardSearchLoss):
         
         return losses
 
+class MultiKeypointLossPooled(RewardSearchLoss):
+    def __init__(self, model_marg=0.2, search_marg=0.7, device='cpu', normalize=True, exp_score=False, num_heads=3, emb_marg=1.0):
+        super().__init__(model_marg, search_marg, device, normalize, exp_score)
+        self.num_heads = num_heads
+        self.emb_marg = emb_marg
+    
+    def _cluster_embeddings(self, embs: Tensor, dim=1):
+        embs = embs.mean(dim=dim)
+        embs = F.normalize(embs, p=2, dim=dim)
+        return embs
+    
+    def _dynamic_triplet_loss(self, x: Tensor, p=2):
+        batch_size, num_embeddings, emb_size = x.shape
+        if num_embeddings < 3:
+            raise ValueError("Number of embeddings per batch must be at least 3")
+        
+        triplet_loss = nn.TripletMarginLoss(margin=self.emb_marg, p=p)
+        losses = []
+
+        # Create triplets such that each embedding gets to be an anchor, positive, and negative
+        for i in range(num_embeddings):
+            anchor = x[:, i, :]
+            positive = x[:, 0, :] if i == num_embeddings - 1 else x[:, i + 1, :]
+            negative = x[:, -1, :] if i == 0 else x[:, i - 1, :]
+            
+            loss = triplet_loss(anchor, positive, negative)
+            losses.append(loss)
+        
+        # Average the losses from each triplet configuration
+        total_loss = torch.mean(torch.stack(losses))
+        
+        return total_loss
+    
+    def forward(self, model_logits: ManyOutObj, tri_out: Tensor, pos_encs: Tensor, neg_encs: Tensor, neut_encs: Tensor, assas_enc: Tensor):
+        pos_cluster = self._cluster_embeddings(pos_encs)
+        assas_encs = assas_enc.unsqueeze(1)
+        neg_vals = torch.cat((neg_encs, neut_encs, assas_encs), dim=1).to(self.device)
+        neg_cluster = self._cluster_embeddings(neg_vals)
+
+        stable_loss = F.triplet_margin_loss(model_logits.model_out, pos_cluster, neg_cluster, margin=self.margin)
+        search_loss = F.triplet_margin_loss(model_logits.model_out, model_logits.max_embs_pooled, model_logits.min_embs_pooled, margin=self.search_marg)
+        spacing_loss = self._dynamic_triplet_loss(tri_out)
+        loss = (stable_loss + search_loss + spacing_loss) / 3
+        return loss
+
+
