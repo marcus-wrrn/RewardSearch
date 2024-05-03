@@ -11,7 +11,7 @@ from utils.vector_search import VectorSearch
 from utils.hidden_vars import BASE_DIR
 import utils.utilities as utils
 from utils.hyperparameters import HyperParameters
-from utils.logger import EpochLogger, TrainLogger
+from utils.logger import EpochLogger, EpochLoggerCombined, TrainLogger
 import random
 
 # This is the main Codenames Model with the best recorded performance -> main training script
@@ -22,29 +22,9 @@ def init_hyperparameters(hp: HyperParameters, model: MORSpyMaster, device, norma
     scheduler = ExponentialLR(optimizer, gamma=hp.gamma)
     return loss_fn, optimizer, scheduler
 
-class LossResults:
-    def __init__(self, data_size: int) -> None:
-        self.tot_pos = 0.0
-        self.tot_neg = 0.0
-        self.tot_neut = 0.0
-        self.size = data_size
-    
-    def add_results(self, results: tuple):
-        assert len(results) == 3
-        pos, neg, neut = results
-
-        self.tot_pos += pos.mean(0).item()
-        self.tot_neg += neg.mean(0).item()
-        self.tot_neut += neut.mean(0).item()
-    
-    @property
-    def results_str(self) -> str:
-        return f"Positive: {self.tot_pos/self.size}, Negative: {self.tot_neg/self.size}, Neutral: {self.tot_neut/self.size}"
-
 @torch.no_grad()
-def validate(model: MORSpyMaster, valid_loader: DataLoader, loss_fn: RewardSearchLoss, device: torch.device):
-    val_logger_search = EpochLogger(len(valid_loader.dataset), len(valid_loader), device=device, name="Validation Search")
-    val_logger_model = EpochLogger(len(valid_loader.dataset), len(valid_loader), device=device, name="Validation Model")
+def validate(model: MORSpyMaster, valid_loader: DataLoader, loss_fn: RewardSearchLoss, device: torch.device) -> EpochLoggerCombined:
+    val_logger = EpochLoggerCombined(len(valid_loader.dataset), len(valid_loader), device=device, name_model="Validation Model", name_search="Validation Search")
 
     for i, data in enumerate(valid_loader, 0):
         pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings = data[1]
@@ -57,14 +37,10 @@ def validate(model: MORSpyMaster, valid_loader: DataLoader, loss_fn: RewardSearc
         #score, results, neut_sum, assas_sum = utils.calc_codenames_score(search_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings, device)
 
         
-        val_logger_search.update_results(search_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
-        val_logger_search.update_loss(loss)
+        val_logger.update_results(model_out, search_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+        val_logger.update_loss(loss)
 
-        val_logger_model.update_results(model_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
-        val_logger_model.update_loss(loss)
-        
-
-    return val_logger_model, val_logger_search
+    return val_logger
 
 def train(hprams: HyperParameters, model: MORSpyMaster, train_loader: DataLoader, valid_loader: DataLoader, device: torch.device, normalize_reward: bool) -> TrainLogger:
 
@@ -77,9 +53,7 @@ def train(hprams: HyperParameters, model: MORSpyMaster, train_loader: DataLoader
     print(f"Starting training at: {datetime.datetime.now()}")
     for epoch in range(1, hprams.n_epochs + 1):
         print(f"Epoch: {epoch}")
-        train_logger_search = EpochLogger(len(train_loader.dataset), len(train_loader), device=device, name="Training Search")
-        train_logger_model = EpochLogger(len(train_loader.dataset), len(train_loader), device=device, name="Training Model")
-
+        epoch_logger = EpochLoggerCombined(len(train_loader.dataset), len(train_loader), device=device, name_model="Train Model", name_search="Train Search")
         counter = 0
         pos_num = -1
         neg_num = -1
@@ -111,13 +85,11 @@ def train(hprams: HyperParameters, model: MORSpyMaster, train_loader: DataLoader
             model_out, search_out, search_out_max, search_out_min = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
 
             loss = loss_fn(model_out, search_out_max, search_out_min, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
-            
-            train_logger_model.update_results(model_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
-            train_logger_search.update_results(search_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
-
-            train_logger_model.update_loss(loss)
-            train_logger_search.update_loss(loss)
             loss.backward()
+
+            epoch_logger.update_results(model_out, search_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+            epoch_logger.update_loss(loss)
+            
             optimizer.step()
 
             # Increment counter
@@ -135,16 +107,13 @@ def train(hprams: HyperParameters, model: MORSpyMaster, train_loader: DataLoader
         scheduler.step()
         
         # Validate model output
-        valid_logger_model, valid_logger_search = validate(model, valid_loader, loss_fn, device)
-        train_logger.add_loggers(train_logger_model, train_logger_search, valid_logger_model, valid_logger_search)
+        valid_logger = validate(model, valid_loader, loss_fn, device)
+        train_logger.add_loggers(epoch_logger, valid_logger)
 
-        # TODO: Implement this in the train logger object
-        print()
-        train_logger_model.print_log()
-        train_logger_search.print_log()
-        
-        valid_logger_model.print_log()
-        valid_logger_search.print_log()
+        print(f"========================================================================================")
+        epoch_logger.print_log()
+        print(f"========================================================================================")
+        valid_logger.print_log()
     
     return train_logger
 
