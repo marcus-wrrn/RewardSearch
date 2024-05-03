@@ -90,20 +90,6 @@ class RewardSearchLoss(RewardSearchLossSmall):
         loss_search = F.triplet_margin_loss(model_out, search_max, search_min, margin=self.search_marg)
 
         return loss_model + np.e**(loss_search)
-
-class RewardSearchWithWassersteinLoss(RewardSearchLoss):
-    def __init__(self, model_marg=0.2, search_marg=0.7, device='cpu', normalize=True, exp_score=False):
-        super().__init__(model_marg, search_marg, device, normalize, exp_score)
-    
-    def forward(self, model_out: Tensor, wasserstein_rot: Tensor, pos_encs: Tensor, neg_encs: Tensor, neutral_encs: Tensor, assas_encs: Tensor):
-        model_out_expanded = model_out.unsqueeze(1)
-        assas_expanded = assas_encs.unsqueeze(1)
-
-        m_pos_score, m_neg_score, m_neut_score, m_assas_score = self._calc_cos_sim(model_out_expanded, pos_encs, neg_encs, neutral_encs, assas_expanded)
-        pos_score, neg_score = self._calc_final_scores(m_pos_score, m_neg_score, m_neut_score, m_assas_score)
-        loss_model = F.relu((neg_score - pos_score) + self.margin).mean()
-
-        return loss_model + wasserstein_rot.mean()
     
 class KeypointTriangulationLoss(RewardSearchLoss):
     def __init__(self, model_marg=0.2, search_marg=0.7, device='cpu', normalize=True, exp_score=False):
@@ -189,33 +175,38 @@ class MultiKeypointLossPooled(RewardSearchLoss):
         if num_embeddings < 3:
             raise ValueError("Number of embeddings per batch must be at least 3")
         
-        triplet_loss = nn.TripletMarginLoss(margin=self.emb_marg, p=p)
-        losses = []
-
+        total_loss = None
         # Create triplets such that each embedding gets to be an anchor, positive, and negative
         for i in range(num_embeddings):
             anchor = x[:, i, :]
             positive = x[:, 0, :] if i == num_embeddings - 1 else x[:, i + 1, :]
             negative = x[:, -1, :] if i == 0 else x[:, i - 1, :]
+
+            pos_sim = F.cosine_similarity(anchor, positive, dim=1)
+            neg_sim = F.cosine_similarity(anchor, negative, dim=1)
             
-            loss = triplet_loss(anchor, positive, negative)
-            losses.append(loss)
-        
-        # Average the losses from each triplet configuration
-        total_loss = torch.mean(torch.stack(losses))
-        
+            loss = F.relu((neg_sim - pos_sim) + self.emb_marg).mean()
+            total_loss = loss if not total_loss else total_loss + loss
+
         return total_loss
     
     def forward(self, model_logits: ManyOutObj, tri_out: Tensor, pos_encs: Tensor, neg_encs: Tensor, neut_encs: Tensor, assas_enc: Tensor):
-        pos_cluster = self._cluster_embeddings(pos_encs)
-        assas_encs = assas_enc.unsqueeze(1)
-        neg_vals = torch.cat((neg_encs, neut_encs, assas_encs), dim=1).to(self.device)
-        neg_cluster = self._cluster_embeddings(neg_vals)
-
-        stable_loss = F.triplet_margin_loss(model_logits.model_out, pos_cluster, neg_cluster, margin=self.margin)
+        model_out_expanded = model_logits.model_out.unsqueeze(1)
+        assas_enc = assas_enc.unsqueeze(1)
+        pos_score, neg_score, neut_score, assas_score = self._calc_cos_sim(model_out_expanded, pos_encs, neg_encs, neut_encs, assas_enc)
+        pos_score, neg_score = self._calc_final_scores(pos_score, neg_score, neut_score, assas_score)
+        
+        stable_loss = F.relu((neg_score - pos_score) + self.margin).mean()
         search_loss = F.triplet_margin_loss(model_logits.model_out, model_logits.max_embs_pooled, model_logits.min_embs_pooled, margin=self.search_marg)
         spacing_loss = self._dynamic_triplet_loss(tri_out)
-        loss = (stable_loss + search_loss + spacing_loss) / 3
+
+        loss = stable_loss + np.e**search_loss + spacing_loss
         return loss
 
 
+class RerankerLoss(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+    
+    def forward(self, rerank_out: Tensor, expected_out: Tensor):
+        ...

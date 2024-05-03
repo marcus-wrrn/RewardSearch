@@ -15,29 +15,10 @@ from utils.logger import TrainLogger, EpochLoggerCombined
 import random 
 
 def init_hyperparameters(hp: HyperParameters, model: MORSpyManyPooled, device, normalize_reward):
-    loss_fn = MultiKeypointLossPooled(model_marg=hp.model_marg, search_marg=hp.search_marg, device=device, normalize=normalize_reward, num_heads=3, emb_marg=0.7)
+    loss_fn = MultiKeypointLossPooled(model_marg=hp.model_marg, search_marg=hp.search_marg, device=device, normalize=normalize_reward, num_heads=3, emb_marg=0.2)
     optimizer = torch.optim.AdamW(model.parameters(), lr=hp.learning_rate, weight_decay=hp.weight_decay)
     scheduler = ExponentialLR(optimizer, gamma=hp.gamma)
     return loss_fn, optimizer, scheduler
-
-class LossResults:
-    def __init__(self, data_size: int) -> None:
-        self.tot_pos = 0.0
-        self.tot_neg = 0.0
-        self.tot_neut = 0.0
-        self.size = data_size
-    
-    def add_results(self, results: tuple):
-        assert len(results) == 3
-        pos, neg, neut = results
-
-        self.tot_pos += pos.mean(0).item()
-        self.tot_neg += neg.mean(0).item()
-        self.tot_neut += neut.mean(0).item()
-    
-    @property
-    def results_str(self) -> str:
-        return f"Positive: {self.tot_pos/self.size}, Negative: {self.tot_neg/self.size}, Neutral: {self.tot_neut/self.size}"
 
 @torch.no_grad()
 def validate(model: MORSpyManyToThree, valid_loader: DataLoader, loss_fn: MultiKeypointLoss, device: torch.device) -> EpochLoggerCombined:

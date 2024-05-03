@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal
-from loss_fns.loss import CombinedTripletLoss
+from loss_fns.loss import CombinedTripletLoss, RewardSearchLoss
 import numpy as np
 """
 The following code is a collection of experimental loss functions that were originally intended to be used in the project. 
