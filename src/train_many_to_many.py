@@ -14,6 +14,11 @@ from utils.hyperparameters import HyperParameters
 from utils.logger import TrainLogger, EpochLoggerCombined
 import random 
 
+# The many to many model is used to experiment with different reranker architectures
+# Unlike the standard reward search model, the many head produces multiple embedding outputs, the outputs are then mean pooled and reward search loss is applied
+# The heads are used to provide further information to the reranker model which allows for processing all potential choices at once with minimal parameter counts
+# NOTE: There is also an experimental spacing loss that is applied between the multi-heads, still not sure if this will result in better performance
+
 def init_hyperparameters(hp: HyperParameters, model: MORSpyManyPooled, device, normalize_reward):
     loss_fn = MultiKeypointLossPooled(model_marg=hp.model_marg, search_marg=hp.search_marg, device=device, normalize=normalize_reward, num_heads=3, emb_marg=0.2)
     optimizer = torch.optim.AdamW(model.parameters(), lr=hp.learning_rate, weight_decay=hp.weight_decay)
@@ -110,6 +115,7 @@ def main(args):
         print("Training with dynamic board")
 
     normalize_reward = utils.convert_args_str_to_bool(args.norm)
+
     print(f"Device: {device}")
     if hpram.using_sentences:
         train_dataset = SentenceNamesDataset(code_dir=code_data, game_dir=guess_data, vocab_dir=args.vocab_dir, seperator=hpram.seperator)
