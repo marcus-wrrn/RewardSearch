@@ -30,7 +30,7 @@ class ManyOutObj:
                  min_embs_pooled: Tensor) -> None:
         self.h_score_emb = highest_scoring_embs
         self.emb_ids = emb_idx
-        self.embs = embeddings
+        self.word_embs = embeddings
         self.emb_scores = emb_scores
         self.max_embs_pooled = max_embs_pooled
         self.min_embs_pooled = min_embs_pooled
@@ -151,7 +151,7 @@ class MORSpyManyPooled(MORSpyManyToThree):
                       neg_embs: Tensor, 
                       neut_embs: Tensor,
                       assas_emb: Tensor) -> Tensor:
-        """Gets the final """
+        """Gets the output of all three heads"""
         concatenated = self._get_combined_input(pos_embs, neg_embs, neut_embs, assas_emb)
         intermediary_out = self.fc(concatenated)
         
@@ -175,7 +175,7 @@ class MORSpyManyPooled(MORSpyManyToThree):
         model_out_pooled = torch.mean(model_out_stacked, dim=1)
         model_out_pooled = F.normalize(model_out_pooled, p=2, dim=1)
         
-        # Apply reranker
+        # Apply reranking
         out = self._rerank_and_process(model_out_pooled, pos_embs, neg_embs, neut_embs, assas_emb)
         return out, model_out_stacked
     
