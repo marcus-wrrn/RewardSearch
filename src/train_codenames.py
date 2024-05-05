@@ -32,17 +32,19 @@ def validate(model: MORSpyMaster, valid_loader: DataLoader, loss_fn: RewardSearc
 
         model_out, search_out, search_out_max, search_out_min = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
 
-        #loss = F.triplet_margin_loss(model_out, search_min, search_max, margin=0.2)
         loss = loss_fn(model_out, search_out_max, search_out_min, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
-        #score, results, neut_sum, assas_sum = utils.calc_codenames_score(search_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings, device)
 
-        
         val_logger.update_results(model_out, search_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
         val_logger.update_loss(loss)
 
     return val_logger
 
-def train(hprams: HyperParameters, model: MORSpyMaster, train_loader: DataLoader, valid_loader: DataLoader, device: torch.device, normalize_reward: bool) -> TrainLogger:
+def train(hprams: HyperParameters, 
+          model: MORSpyMaster, 
+          train_loader: DataLoader, 
+          valid_loader: DataLoader, 
+          device: torch.device, 
+          normalize_reward: bool) -> TrainLogger:
 
     loss_fn, optimizer, scheduler = init_hyperparameters(hprams, model, device, normalize_reward)
     print("Training")
