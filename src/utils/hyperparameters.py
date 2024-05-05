@@ -51,3 +51,24 @@ class HyperParameters:
         }
         with open(filepath, 'w') as file:
             json.dump(data, file)
+
+
+class RerankerHyperParameter:
+    def __init__(self, args) -> None:
+        self.learning_rate = args.lr
+        self.gamma = args.gamma
+        self.weight_decay = args.w_decay
+        self.search_window = args.sw
+        self.dynamic_board = convert_args_str_to_bool(args.dynamic_board)
+    
+    def save_params(self, filepath: str):
+        data = {
+            "learning_rate": self.learning_rate,
+            "gamma": self.gamma,
+            "weight_decay": self.weight_decay,
+            "search_window": self.search_window,
+            "dynamic_board": self.dynamic_board
+        }
+
+        with open(filepath, 'w') as file:
+            json.dump(data, file)
