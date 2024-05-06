@@ -207,6 +207,9 @@ class MultiKeypointLossPooled(RewardSearchLoss):
 class RerankerLoss(nn.Module):
     def __init__(self) -> None:
         super().__init__()
+
+        self.bce_loss = nn.BCELoss()
     
-    def forward(self, rerank_out: Tensor, expected_out: Tensor):
-        ...
+    def forward(self, rerank_out: Tensor, target_out: Tensor):
+        loss = self.bce_loss(rerank_out, target_out)
+        return loss

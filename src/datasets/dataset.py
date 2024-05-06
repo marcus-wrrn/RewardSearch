@@ -132,7 +132,7 @@ class CodeNamesDataset(CodeGiverDataset):
         return (pos_sent, neg_sent, neutral_sent, assassin_word), (pos_embeddings, neg_embeddings, neutral_embeddings, assassin_embedding)
 
 class SentenceNamesDataset(CodeNamesDataset):
-    # TODO: Refactor, this does not follow best practices at all
+    # TODO: Refactor, this 
     def __init__(self, code_dir: str, game_dir: str, vocab_dir=None, seperator='<SEP>'):
         super().__init__(code_dir, game_dir, seperator)
         if not vocab_dir:
