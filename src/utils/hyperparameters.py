@@ -55,6 +55,10 @@ class HyperParameters:
 
 class RerankerHyperParameter:
     def __init__(self, args) -> None:
+        self.n_epochs = args.e
+        self.batch_size = args.b
+
+
         self.learning_rate = args.lr
         self.gamma = args.gamma
         self.weight_decay = args.w_decay
@@ -63,6 +67,8 @@ class RerankerHyperParameter:
     
     def save_params(self, filepath: str):
         data = {
+            "epochs": self.n_epochs,
+            "batch_size": self.batch_size,
             "learning_rate": self.learning_rate,
             "gamma": self.gamma,
             "weight_decay": self.weight_decay,

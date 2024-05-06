@@ -96,3 +96,10 @@ def slice_board_embeddings(embs: Tensor):
     """Used to randomly remove words/collections of text, from the game board"""
     rand_num = random.randint(1, embs.shape[1])
     return embs[:, :rand_num, :]
+
+
+def cluster_embeddings(embs: Tensor):
+    """Mean pool and normalize all embeddings"""
+    out = torch.mean(embs,dim=1)
+    out = F.normalize(out, p=2, dim=1)
+    return out
