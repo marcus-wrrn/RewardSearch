@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import torch.nn.functional as F
 import json
 import random
+import logging
 
 def get_device(is_cuda: str):
     if (is_cuda.lower() == 'y' and torch.cuda.is_available()):
@@ -103,3 +104,16 @@ def cluster_embeddings(embs: Tensor):
     out = torch.mean(embs,dim=1)
     out = F.normalize(out, p=2, dim=1)
     return out
+
+def console_logger(logger_name: str, level=logging.DEBUG) -> logging.Logger:
+    """Initializes a logger for the use of printing debug messages to the console"""
+    console_logger = logging.getLogger(logger_name)
+    console_logger.setLevel(level)
+    
+    formatter = logging.Formatter('%(asctime)s - %(message)s')
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+
+    console_logger.addHandler(stream_handler)
+
+    return console_logger

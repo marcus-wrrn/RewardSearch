@@ -12,11 +12,9 @@ class Reranker(nn.Module):
 
         input_size = vocab_size * head_num
         self.fc = nn.Sequential(
-            nn.Linear(input_size, int(input_size * 0.7)),
+            nn.Linear(input_size, int(input_size * 1.5)),
             nn.ReLU(),
-            nn.Linear(int(input_size * 0.7), input_size // 2),
-            nn.ReLU(),
-            nn.Linear(input_size // 2, input_size // 3)
+            nn.Linear(int(input_size * 1.5), vocab_size),
         )
 
     def forward(self, tri_out: Tensor, text_embs: Tensor):
@@ -34,12 +32,10 @@ class Reranker(nn.Module):
 
         sim_scores = torch.stack(sim_scores, dim=2)
         sim_scores = sim_scores.view(sim_scores.shape[0], -1)
-        
+        #model_input = torch.cat((encoder_out, sim_scores), dim=1)
         out = self.fc(sim_scores)
-
+        out = torch.sigmoid(out)
         return out
-
-
 
 
 

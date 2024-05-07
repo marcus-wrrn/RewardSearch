@@ -28,7 +28,7 @@ def init_hyperparameters(hp: HyperParameters, model: MORSpyManyPooled, device, n
 @torch.no_grad()
 def validate(model: MORSpyManyToThree, valid_loader: DataLoader, loss_fn: MultiKeypointLoss, device: torch.device) -> EpochLoggerCombined:
     val_logger = EpochLoggerCombined(len(valid_loader.dataset), len(valid_loader), device=device, name_model="Validation Model", name_search="Validation Search")
-    counter = 0
+    
     for i, data in enumerate(valid_loader, 0):
         pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings = data[1]
         pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings = pos_embeddings.to(device), neg_embeddings.to(device), neut_embeddings.to(device), assas_embeddings.to(device)
@@ -39,8 +39,6 @@ def validate(model: MORSpyManyToThree, valid_loader: DataLoader, loss_fn: MultiK
         
         val_logger.update_results(model_logits.model_out, model_logits.h_score_emb, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
         val_logger.update_loss(loss)
-        
-        counter += 1
 
     return val_logger
 
@@ -54,7 +52,13 @@ def train(hprams: HyperParameters, model: MORSpyManyPooled, train_loader: DataLo
     print(f"Starting training at: {datetime.datetime.now()}")
     for epoch in range(1, hprams.n_epochs + 1):
         print(f"Epoch: {epoch}")
-        epoch_logger = EpochLoggerCombined(len(train_loader.dataset), len(train_loader), device=device, name_model="Train Model", name_search="Train Search")
+        epoch_logger = EpochLoggerCombined(
+            len(train_loader.dataset), 
+            len(train_loader), 
+            device=device, 
+            name_model="Train Model", 
+            name_search="Train Search"
+        )
 
         for i, data in enumerate(train_loader, 0):
             if (i % 100 == 0):
