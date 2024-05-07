@@ -220,7 +220,7 @@ def main(args):
     )
 
     results.save_results(output_dir)
-    model_path = f"{encoder_dir}model.pth"
+    model_path = f"{output_dir}model.pth"
     torch.save(reranker.state_dict(), model_path)
 
 if __name__ == "__main__":
