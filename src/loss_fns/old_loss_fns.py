@@ -1,11 +1,15 @@
 from datasets.dataset import CodeGiverDataset
 from sentence_transformers import util
 import torch
+from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal
 from loss_fns.loss import CombinedTripletLoss, RewardSearchLoss
 import numpy as np
+from models.many_to_many import ManyOutObj
+
+
 """
 The following code is a collection of experimental loss functions that were originally intended to be used in the project. 
 However, they did not provide desireable results and so have been moved to their own seperate file, in case they could be of use later.
@@ -263,3 +267,49 @@ class MultiObjectiveScoringLoss(nn.Module):
         neg_score = torch.cat((m_neg_score, m_neut_score), dim=1).mean(dim=1)
         loss = F.relu((neg_score - m_pos_score.mean(dim=1)) * target_loss + self.margin)
         return loss.mean(), target_loss.mean(), results.mean()
+    
+
+
+class MultiKeypointLoss(RewardSearchLoss):
+    def __init__(self, model_marg=0.2, search_marg=0.7, device='cpu', normalize=True, exp_score=False, num_heads=3):
+        super().__init__(model_marg, search_marg, device, normalize, exp_score)
+        self.num_heads = num_heads
+    
+    def _cluster_embeddings(self, embs: Tensor, dim=1):
+        embs = embs.mean(dim=dim)
+        embs = F.normalize(embs, p=2, dim=dim)
+        return embs
+    
+    def forward(self, model_logits: list[ManyOutObj], pos_encs: Tensor, neg_encs: Tensor, neut_encs: Tensor, assas_encs: Tensor, backward=True):
+        # Pool positive embeddings
+        pos_cluster = self._cluster_embeddings(pos_encs)
+        assas_encs = assas_encs.unsqueeze(1)
+        neg_vals = torch.cat((neg_encs, neut_encs, assas_encs), dim=1).to(self.device)
+        neg_cluster = self._cluster_embeddings(neg_vals)
+
+        losses = []
+        for i, model_log in enumerate(model_logits):
+            stable_loss = F.triplet_margin_loss(model_log.encoder_out, pos_cluster, neg_cluster, margin=self.margin)
+            search_loss = F.triplet_margin_loss(model_log.encoder_out, model_log.max_embs_pooled, model_log.min_embs_pooled, margin=self.search_marg)
+            # Get the two different values
+            model_out1 = None
+            model_out2 = None
+            if i == 0:
+                model_out1 = model_logits[-1].encoder_out
+            else:
+                model_out1 = model_logits[i - 1].encoder_out
+            
+            if i == len(model_logits) - 1:
+                model_out2 = model_logits[0].encoder_out
+            else:
+                model_out2 = model_logits[i + 1].encoder_out
+            
+            dist_loss = F.triplet_margin_loss(model_log.encoder_out, model_out1, model_out2, margin=0.7)
+
+            total_loss = stable_loss + np.e**search_loss + dist_loss
+            if backward:
+                total_loss.backward(retain_graph=True)
+
+            losses.append(total_loss.mean())
+        
+        return losses

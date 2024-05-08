@@ -115,55 +115,27 @@ class KeypointTriangulationLoss(RewardSearchLoss):
         return p_topic_loss + loss_positive + loss_negative
 
 
-class MultiKeypointLoss(RewardSearchLoss):
-    def __init__(self, model_marg=0.2, search_marg=0.7, device='cpu', normalize=True, exp_score=False, num_heads=3):
-        super().__init__(model_marg, search_marg, device, normalize, exp_score)
-        self.num_heads = num_heads
-    
-    def _cluster_embeddings(self, embs: Tensor, dim=1):
-        embs = embs.mean(dim=dim)
-        embs = F.normalize(embs, p=2, dim=dim)
-        return embs
-    
-    def forward(self, model_logits: list[ManyOutObj], pos_encs: Tensor, neg_encs: Tensor, neut_encs: Tensor, assas_encs: Tensor, backward=True):
-        # Pool positive embeddings
-        pos_cluster = self._cluster_embeddings(pos_encs)
-        assas_encs = assas_encs.unsqueeze(1)
-        neg_vals = torch.cat((neg_encs, neut_encs, assas_encs), dim=1).to(self.device)
-        neg_cluster = self._cluster_embeddings(neg_vals)
-
-        losses = []
-        for i, model_log in enumerate(model_logits):
-            stable_loss = F.triplet_margin_loss(model_log.model_out, pos_cluster, neg_cluster, margin=self.margin)
-            search_loss = F.triplet_margin_loss(model_log.model_out, model_log.max_embs_pooled, model_log.min_embs_pooled, margin=self.search_marg)
-            # Get the two different values
-            model_out1 = None
-            model_out2 = None
-            if i == 0:
-                model_out1 = model_logits[-1].model_out
-            else:
-                model_out1 = model_logits[i - 1].model_out
-            
-            if i == len(model_logits) - 1:
-                model_out2 = model_logits[0].model_out
-            else:
-                model_out2 = model_logits[i + 1].model_out
-            
-            dist_loss = F.triplet_margin_loss(model_log.model_out, model_out1, model_out2, margin=0.7)
-
-            total_loss = stable_loss + np.e**search_loss + dist_loss
-            if backward:
-                total_loss.backward(retain_graph=True)
-
-            losses.append(total_loss.mean())
+class MultiHeadRewardSearch(nn.Module):
+    """RewardSearch for multi head models"""
+    def __init__(self, model_marg=0.2, search_marg=0.7, emb_marg=1.0):
+        super().__init__()
         
-        return losses
-
-class MultiKeypointLossPooled(RewardSearchLoss):
-    def __init__(self, model_marg=0.2, search_marg=0.7, device='cpu', normalize=True, exp_score=False, num_heads=3, emb_marg=1.0):
-        super().__init__(model_marg, search_marg, device, normalize, exp_score)
-        self.num_heads = num_heads
+        self.m_marg = model_marg
+        self.s_marg = search_marg
         self.emb_marg = emb_marg
+
+    def _calc_cos_sim(self, anchor: torch.Tensor, pos: torch.Tensor, neg: torch.Tensor, neutral: torch.Tensor, assassin: torch.Tensor):
+        pos_score = F.cosine_similarity(anchor, pos, dim=2)
+        neg_score = F.cosine_similarity(anchor, neg, dim=2)
+        neutral_score = F.cosine_similarity(anchor, neutral, dim=2)
+        assassin_score = F.cosine_similarity(anchor, assassin, dim=2)
+        return pos_score, neg_score, neutral_score, assassin_score
+    
+    def _calc_final_scores(self, pos_score: torch.Tensor, neg_score: torch.Tensor, neut_score: torch.Tensor, assas_score: torch.Tensor):
+        neg_score = torch.cat((neg_score, neut_score, assas_score), dim=1).mean(dim=1) 
+        pos_score = pos_score.mean(dim=1)
+        
+        return pos_score, neg_score
     
     def _cluster_embeddings(self, embs: Tensor, dim=1):
         embs = embs.mean(dim=dim)
@@ -171,6 +143,7 @@ class MultiKeypointLossPooled(RewardSearchLoss):
         return embs
     
     def _dynamic_triplet_loss(self, x: Tensor, p=2):
+        #TODO: Replace with matrix multiplication for greater efficiency
         batch_size, num_embeddings, emb_size = x.shape
         if num_embeddings < 3:
             raise ValueError("Number of embeddings per batch must be at least 3")
@@ -191,13 +164,13 @@ class MultiKeypointLossPooled(RewardSearchLoss):
         return total_loss
     
     def forward(self, model_logits: ManyOutObj, tri_out: Tensor, pos_encs: Tensor, neg_encs: Tensor, neut_encs: Tensor, assas_enc: Tensor):
-        model_out_expanded = model_logits.model_out.unsqueeze(1)
+        model_out_expanded = model_logits.encoder_out.unsqueeze(1)
         assas_enc = assas_enc.unsqueeze(1)
         pos_score, neg_score, neut_score, assas_score = self._calc_cos_sim(model_out_expanded, pos_encs, neg_encs, neut_encs, assas_enc)
         pos_score, neg_score = self._calc_final_scores(pos_score, neg_score, neut_score, assas_score)
         
-        stable_loss = F.relu((neg_score - pos_score) + self.margin).mean()
-        search_loss = F.triplet_margin_loss(model_logits.model_out, model_logits.max_embs_pooled, model_logits.min_embs_pooled, margin=self.search_marg)
+        stable_loss = F.relu((neg_score - pos_score) + self.m_marg).mean()
+        search_loss = F.triplet_margin_loss(model_logits.encoder_out, model_logits.max_embs_pooled, model_logits.min_embs_pooled, margin=self.s_marg)
         spacing_loss = self._dynamic_triplet_loss(tri_out)
 
         loss = stable_loss + np.e**search_loss + spacing_loss
@@ -205,6 +178,7 @@ class MultiKeypointLossPooled(RewardSearchLoss):
 
 
 class RerankerLoss(nn.Module):
+    """Currently just binary cross entropy"""
     def __init__(self) -> None:
         super().__init__()
 
