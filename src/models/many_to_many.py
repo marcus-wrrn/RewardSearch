@@ -7,26 +7,13 @@ from torch import Tensor, device
 from utils.vector_search import VectorSearch
 from models.multi_objective_models import MORSpyMaster, MOROutObj
 
-class OutLayerBlock(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-        self.fc = nn.Sequential(
-            nn.Linear(1500, 1000),
-            nn.Tanh(),
-            nn.Linear(1000, 768)
-        )
-    
-    def forward(self, emb: Tensor) -> Tensor:
-        return self.fc(emb)
-
 class ManyOutObj:
     """Output object of the ManytoNum models, contains all info needed for training and testing"""
     def __init__(self, embeddings: Tensor, 
                  emb_scores: Tensor, 
                  highest_scoring_embs: Tensor, 
                  emb_idx: Tensor, 
-                 max_embs_pooled: 
-                 Tensor, 
+                 max_embs_pooled: Tensor, 
                  min_embs_pooled: Tensor) -> None:
         self.h_score_emb = highest_scoring_embs
         self.emb_ids = emb_idx
@@ -36,7 +23,7 @@ class ManyOutObj:
         self.min_embs_pooled = min_embs_pooled
         self.texts = None
         self.dists = None
-        self.model_out = None
+        self.encoder_out = None
     
     def add_text(self, texts: str):
         self.texts = texts
@@ -44,34 +31,18 @@ class ManyOutObj:
     def add_dist(self, dists: list):
         self.dists = dists
 
-    def add_model_out(self, out: Tensor):
-        self.model_out = out
+    def add_encoder_out(self, out: Tensor):
+        self.encoder_out = out
 
 
-class MORSpyManyToThree(MORSpyMaster):
-    """Experimental model with three outputs"""
-    def __init__(self, 
-                 vocab: VectorSearch, 
-                 device: device, 
-                 neutral_weight=1, 
-                 negative_weight=0, 
-                 assassin_weights=-10, 
-                 vocab_size=80, 
-                 search_pruning=False):
+class MORSpyManyPooled(MORSpyMaster):
+    def __init__(self, vocab: VectorSearch, device: device, neutral_weight=1, negative_weight=0, assassin_weights=-10, vocab_size=80, search_pruning=False, num_heads=3):
         super().__init__(vocab, device, neutral_weight, negative_weight, assassin_weights, vocab_size, search_pruning)
-        
-        self.fc = nn.Sequential(
-            nn.Linear(3072, 5000),
-            nn.Tanh(),
-            nn.Linear(5000, 2500),
-            nn.Tanh(),
-            nn.Linear(2500, 1500),
-        )
 
-        self.out_layer1 = OutLayerBlock()
-        self.out_layer2 = OutLayerBlock()
-        self.out_layer3 = OutLayerBlock()
+        self.num_heads = num_heads
+        self.head_layers = [nn.Linear(1000, 768, device=device) for i in range(num_heads)]
 
+    
     def _find_scored_embeddings(self, reward: Tensor, word_embeddings: Tensor):
         # Find lowest scoring and highest scored indices
         index_max_vals, index_max = torch.topk(reward, k=word_embeddings.shape[1]//2, dim=1)
@@ -95,7 +66,7 @@ class MORSpyManyToThree(MORSpyMaster):
                                neg_encs: Tensor, 
                                neut_encs: Tensor, 
                                assassin_encs: Tensor, 
-                               reverse=False) -> tuple:
+                               reverse=False) -> ManyOutObj:
         
         word_embs_expanded = word_embeddings.unsqueeze(2)
         # Process encoding shapes
@@ -111,6 +82,7 @@ class MORSpyManyToThree(MORSpyMaster):
         out_obj = ManyOutObj(word_embeddings, tot_reward, highest_emb_scored, best_score_idx, max_embs_pooled, min_embs_pooled)
         return out_obj
 
+    
     def _rerank_and_process(self, model_out: Tensor, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assas_embs: Tensor) -> ManyOutObj:
         texts, embs, dist = self.vocab.search(model_out, num_results=self.vocab_size)
         embs = torch.tensor(embs).to(self.device).squeeze(1)
@@ -118,33 +90,8 @@ class MORSpyManyToThree(MORSpyMaster):
 
         out_obj.add_text(texts)
         out_obj.add_dist(dist)
-        out_obj.add_model_out(model_out)
+        out_obj.add_encoder_out(model_out)
         return out_obj
-
-    def forward(self, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assas_emb: Tensor) -> list[ManyOutObj]:
-        concatenated = self._get_combined_input(pos_embs, neg_embs, neut_embs, assas_emb)
-        intermediary_out = self.fc(concatenated)
-        
-        model_out1 = self.out_layer1(intermediary_out)
-        model_out2 = self.out_layer2(intermediary_out)
-        model_out3 = self.out_layer3(intermediary_out)
-        
-
-        model_out1 = F.normalize(model_out1, p=2, dim=1)
-        model_out2 = F.normalize(model_out2, p=2, dim=1)
-        model_out3 = F.normalize(model_out3, p=2, dim=1)
-
-        out1 = self._rerank_and_process(model_out1, pos_embs, neg_embs, neut_embs, assas_emb)
-        out2 = self._rerank_and_process(model_out2, pos_embs, neg_embs, neut_embs, assas_emb)
-        out3 = self._rerank_and_process(model_out3, pos_embs, neg_embs, neut_embs, assas_emb)
-
-        return [out1, out2, out3]
-    
-
-class MORSpyManyPooled(MORSpyManyToThree):
-    def __init__(self, vocab: VectorSearch, device: device, neutral_weight=1, negative_weight=0, assassin_weights=-10, vocab_size=80, search_pruning=False):
-        super().__init__(vocab, device, neutral_weight, negative_weight, assassin_weights, vocab_size, search_pruning)
-
     
     def process_heads(self, 
                       pos_embs: Tensor, 
@@ -155,15 +102,12 @@ class MORSpyManyPooled(MORSpyManyToThree):
         concatenated = self._get_combined_input(pos_embs, neg_embs, neut_embs, assas_emb)
         intermediary_out = self.fc(concatenated)
         
-        model_out1 = self.out_layer1(intermediary_out)
-        model_out2 = self.out_layer2(intermediary_out)
-        model_out3 = self.out_layer3(intermediary_out)
+        model_outs = [layer(intermediary_out) for layer in self.head_layers]
         
         # Cluster embeddings together
-        model_out_stacked = torch.stack((model_out1, model_out2, model_out3), dim=1)
+        model_out_stacked = torch.stack(model_outs, dim=1)
         return model_out_stacked
 
-    
     def forward(self, 
                 pos_embs: Tensor, 
                 neg_embs: Tensor, 
