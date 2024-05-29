@@ -2,10 +2,9 @@ from sentence_transformers import util
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.distributions import Normal
 import numpy as np
 from torch import Tensor
-from models.many_to_many import ManyOutObj
+from models.reranker import ManyOutObj
 
 def triplet_loss(out_embedding, pos_embeddings, neg_embeddings, margin=0):
     pos_sim = util.cos_sim(out_embedding, pos_embeddings)/len(pos_embeddings)
@@ -182,8 +181,11 @@ class RerankerLoss(nn.Module):
     def __init__(self) -> None:
         super().__init__()
 
-        self.bce_loss = nn.BCELoss()
+        self.ce_loss = nn.CrossEntropyLoss()
     
-    def forward(self, rerank_out: Tensor, target_out: Tensor):
-        loss = self.bce_loss(rerank_out, target_out)
+    def forward(self, logits: ManyOutObj):
+        scores = logits.emb_scores
+        scores_normed = F.normalize(scores, p=2, dim=1)
+        rerank_out = logits.reranker_out
+        loss = self.ce_loss(rerank_out, scores_normed)
         return loss

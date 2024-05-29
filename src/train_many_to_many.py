@@ -1,8 +1,8 @@
 import torch
 from torch.optim.lr_scheduler import ExponentialLR
-from loss_fns.loss import MultiKeypointLoss, MultiKeypointLossPooled
+from loss_fns.loss import MultiHeadRewardSearch
 from torch.utils.data import DataLoader
-from models.many_to_many import MORSpyManyToThree, MORSpyManyPooled
+from models.many_to_many import MORSpyManyPooled
 from datasets.dataset import CodeNamesDataset, SentenceNamesDataset
 import datetime
 import argparse
@@ -12,39 +12,42 @@ from utils.hidden_vars import BASE_DIR
 import utils.utilities as utils
 from utils.hyperparameters import HyperParameters
 from utils.logger import TrainLogger, EpochLoggerCombined
+from models.reranker import Reranker
 import random 
 
 # The many to many model is used to experiment with different reranker architectures
 # Unlike the standard reward search model, the many head produces multiple embedding outputs, the outputs are then mean pooled and reward search loss is applied
 # The heads are used to provide further information to the reranker model which allows for processing all potential choices at once with minimal parameter counts
-# NOTE: There is also an experimental spacing loss that is applied between the multi-heads, still not sure if this will result in better performance
+# NOTE: There is also an experimental spacing loss that is applied between the multi-heads, still unsure of its impact on performance
 
-def init_hyperparameters(hp: HyperParameters, model: MORSpyManyPooled, device, normalize_reward):
-    loss_fn = MultiKeypointLossPooled(model_marg=hp.model_marg, search_marg=hp.search_marg, device=device, normalize=normalize_reward, num_heads=3, emb_marg=0.2)
+def init_hyperparameters(hp: HyperParameters, model: MORSpyManyPooled):
+    loss_fn = MultiHeadRewardSearch(model_marg=hp.model_marg, search_marg=hp.search_marg, emb_marg=0.2)
     optimizer = torch.optim.AdamW(model.parameters(), lr=hp.learning_rate, weight_decay=hp.weight_decay)
     scheduler = ExponentialLR(optimizer, gamma=hp.gamma)
     return loss_fn, optimizer, scheduler
 
 @torch.no_grad()
-def validate(model: MORSpyManyToThree, valid_loader: DataLoader, loss_fn: MultiKeypointLoss, device: torch.device) -> EpochLoggerCombined:
+def validate(model: MORSpyManyPooled, reranker: Reranker, valid_loader: DataLoader, loss_fn: MultiHeadRewardSearch, device: torch.device) -> EpochLoggerCombined:
     val_logger = EpochLoggerCombined(len(valid_loader.dataset), len(valid_loader), device=device, name_model="Validation Model", name_search="Validation Search")
     
     for i, data in enumerate(valid_loader, 0):
         pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings = data[1]
         pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings = pos_embeddings.to(device), neg_embeddings.to(device), neut_embeddings.to(device), assas_embeddings.to(device)
 
-        model_logits, tri_out = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+        model_out, tri_out = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+
+        model_logits = reranker.rerank_and_process(model_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
 
         loss = loss_fn(model_logits, tri_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
         
-        val_logger.update_results(model_logits.model_out, model_logits.h_score_emb, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+        val_logger.update_results(model_logits.encoder_out, model_logits.h_score_emb, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
         val_logger.update_loss(loss)
 
     return val_logger
 
-def train(hprams: HyperParameters, model: MORSpyManyPooled, train_loader: DataLoader, valid_loader: DataLoader, device: torch.device, normalize_reward: bool) -> TrainLogger:
+def train(hprams: HyperParameters, model: MORSpyManyPooled, reranker: Reranker, train_loader: DataLoader, valid_loader: DataLoader, device: torch.device, normalize_reward: bool) -> TrainLogger:
 
-    loss_fn, optimizer, scheduler = init_hyperparameters(hprams, model, device, normalize_reward)
+    loss_fn, optimizer, scheduler = init_hyperparameters(hprams, model)
     print("Training")
     model.train()
 
@@ -84,12 +87,14 @@ def train(hprams: HyperParameters, model: MORSpyManyPooled, train_loader: DataLo
                 neut_embeddings = neut_embeddings[:, :neut_num, :]
             
             optimizer.zero_grad()
-            model_logits, tri_out = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+            model_out, tri_out = model(pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+
+            model_logits = reranker.rerank_and_process(model_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
 
             loss = loss_fn(model_logits, tri_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
             loss.backward()
 
-            epoch_logger.update_results(model_logits.model_out, model_logits.h_score_emb, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+            epoch_logger.update_results(model_logits.encoder_out, model_logits.h_score_emb, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
             epoch_logger.update_loss(loss)
 
             optimizer.step()
@@ -97,7 +102,7 @@ def train(hprams: HyperParameters, model: MORSpyManyPooled, train_loader: DataLo
         scheduler.step()
         
         # Validate model output
-        valid_logger = validate(model, valid_loader, loss_fn, device)
+        valid_logger = validate(model, reranker, valid_loader, loss_fn, device)
         train_logger.add_loggers(epoch_logger, valid_logger)
 
         print(f"========================================================================================")
@@ -133,12 +138,20 @@ def main(args):
 
     print(f"Training Length: {len(train_dataset)}")
     vector_db = VectorSearch(train_dataset, prune=True, n_dim=hpram.emb_size)
+    reranker = Reranker(
+        vocab=vector_db, 
+        vocab_size=hpram.search_window, 
+        neg_weight=hpram.neg_weight, 
+        neut_weight=hpram.neut_weight, 
+        assas_weight=hpram.assas_weight,
+        device=device
+    )
 
     # Initialize model
-    model = MORSpyManyPooled(vector_db, device, neutral_weight=hpram.neut_weight, negative_weight=hpram.neg_weight, assassin_weights=hpram.assas_weight, vocab_size=hpram.search_window)
+    model = MORSpyManyPooled(num_heads=hpram.num_heads)
     model.to(device)
 
-    logger = train(hprams=hpram, model=model, train_loader=train_dataloader, valid_loader=valid_dataloader, device=device, normalize_reward=normalize_reward)
+    logger = train(hprams=hpram, model=model, reranker=reranker, train_loader=train_dataloader, valid_loader=valid_dataloader, device=device, normalize_reward=normalize_reward)
     
     # Save log results
     logger.save_results(args.dir)
@@ -185,5 +198,6 @@ if __name__ == "__main__":
     parser.add_argument('-name', type=str, help="Name of Model", default="model")
     parser.add_argument('-backbone', type=str, help="Encoder backbone: determines the size of the search head, dependent on size of embeddings", default='all-mpnet-base-v2')
     parser.add_argument('-dynamic_board', type=str, help="Enable to cause for the random removal of words from the game board for every batch (simulates different board states): [Y/n]", default='n')
+    parser.add_argument('-num_heads', type=int, help="Number of output heads", default=3)
     args = parser.parse_args()
     main(args)

@@ -1,7 +1,6 @@
 import argparse
 import torch
-from models.many_to_many import MORSpyManyPooled
-from models.reranker import Reranker
+from models.many_to_many import MORSpyManyPooled, MORSpyFull
 from datasets.dataset import CodeNamesDataset
 from torch.utils.data import DataLoader
 import utils.utilities as utils
@@ -15,15 +14,14 @@ import logging
 import random
 
 
-def init_hyperparameters(hp: RerankerHyperParameter, model: Reranker):
+def init_hyperparameters(hp: RerankerHyperParameter, model: MORSpyFull):
     loss_fn_rerank = RerankerLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=hp.learning_rate, weight_decay=hp.weight_decay)
     scheduler = ExponentialLR(optimizer, gamma=hp.gamma)
     return loss_fn_rerank, optimizer, scheduler
 
 @torch.no_grad()
-def validate(encoder: MORSpyManyPooled, 
-             reranker: Reranker, 
+def validate(model: MORSpyFull,
              valid_loader: DataLoader, 
              loss_fn: RerankerLoss, 
              device: torch.device) -> EpochLoggerCombined:
@@ -42,30 +40,22 @@ def validate(encoder: MORSpyManyPooled,
         neut_embs = neut_embs.to(device)
         assas_emb = assas_emb.to(device)
 
-        encoder_logits, encoder_heads = encoder(pos_embs, neg_embs, neut_embs, assas_emb)
+        logits = model(pos_embs, neg_embs, neut_embs, assas_emb)
 
-        out = reranker(encoder_heads, encoder_logits.word_embs)
-
-        target_idx = encoder_logits.emb_ids
-            
-        # Build target tensor
-        target_tensor = torch.zeros(target_idx.shape[0], out.shape[1], dtype=torch.float32, device=device)
-        target_tensor.scatter_(1, target_idx.unsqueeze(1), 1)
-
-        loss = loss_fn(out, target_tensor)
+        loss = loss_fn(logits)
 
         # Find most similar output
-        word_indices = torch.max(out, dim=1).indices
+        word_indices = torch.max(logits.reranker_out, dim=1).indices
 
         # No need to expand for every embedding dimension if gathering across num_outputs
         word_indices = word_indices.unsqueeze(1).expand(-1, 768)  # Prepare for gather
 
         # Gather embeddings
-        word_embeddings = torch.gather(encoder_logits.word_embs, 1, word_indices.unsqueeze(1)).squeeze(1)
+        word_embeddings = torch.gather(logits.word_embs, 1, word_indices.unsqueeze(1)).squeeze(1)
 
         val_logger.update_results(
             model_out=word_embeddings,
-            search_out=encoder_logits.h_score_emb,
+            search_out=logits.h_score_emb,
             pos_emb=pos_embs,
             neg_emb=neg_embs,
             neut_emb=neut_embs,
@@ -76,17 +66,15 @@ def validate(encoder: MORSpyManyPooled,
     return val_logger
 
 def train(hprams: RerankerHyperParameter, 
-          encoder: MORSpyManyPooled, 
-          reranker: Reranker, 
+          model: MORSpyFull, 
           train_loader: DataLoader,
           valid_loader: DataLoader,
           console_logger: logging.Logger,
           device='cpu') -> TrainLogger:
-    loss_fn, optimizer, scheduler = init_hyperparameters(hprams, reranker)
+    loss_fn, optimizer, scheduler = init_hyperparameters(hprams, model)
     
     
-    reranker.train()
-    encoder.eval()
+    model.train()
 
     train_logger = TrainLogger()
     console_logger.info("Started Training")
@@ -124,34 +112,31 @@ def train(hprams: RerankerHyperParameter,
 
             optimizer.zero_grad()
             
-            with torch.no_grad():
-                encoder_logits, encoder_heads = encoder(pos_embs, neg_embs, neut_embs, assas_emb)
-
-            out = reranker(encoder_heads, encoder_logits.word_embs)
+            logits = model(pos_embs, neg_embs, neut_embs, assas_emb)
            
 
-            target_idx = encoder_logits.emb_ids
+            # target_idx = logits.emb_ids
             
-            # Build target tensor
-            target_tensor = torch.zeros(target_idx.shape[0], out.shape[1], dtype=torch.float32, device=device)
-            target_tensor.scatter_(1, target_idx.unsqueeze(1), 1)
+            # # Build target tensor
+            # target_tensor = torch.zeros(target_idx.shape[0], logits.reranker_out.shape[1], dtype=torch.float32, device=device)
+            # target_tensor.scatter_(1, target_idx.unsqueeze(1), 1)
 
-            loss = loss_fn(out, target_tensor)
+            loss = loss_fn(logits)
 
             loss.backward()
 
             # Find most similar output
-            word_indices = torch.max(out, dim=1).indices
+            word_indices = torch.max(logits.reranker_out, dim=1).indices
 
             # No need to expand for every embedding dimension if gathering across num_outputs
             word_indices = word_indices.unsqueeze(1).expand(-1, 768)  # Prepare for gather
 
             # Gather embeddings
-            word_embeddings = torch.gather(encoder_logits.word_embs, 1, word_indices.unsqueeze(1)).squeeze(1)
+            word_embeddings = torch.gather(logits.word_embs, 1, word_indices.unsqueeze(1)).squeeze(1)
 
             epoch_logger.update_results(
                 model_out=word_embeddings, 
-                search_out=encoder_logits.h_score_emb, 
+                search_out=logits.h_score_emb, 
                 pos_emb=pos_embs, 
                 neg_emb=neg_embs, 
                 neut_emb=neut_embs, 
@@ -163,7 +148,7 @@ def train(hprams: RerankerHyperParameter,
 
         # Validate model output
         console_logger.info("Validating model: Note that validation set uses static board size, if training on dynamic board, results may differ significantly")
-        valid_logger = validate(encoder, reranker, valid_loader, loss_fn, device)
+        valid_logger = validate(model, valid_loader, loss_fn, device)
         train_logger.add_loggers(epoch_logger, valid_logger)
 
         scheduler.step()
@@ -201,18 +186,26 @@ def main(args):
 
     console_logger.info("Indexing Search Graph")
     vocab = VectorSearch(train_dataset, prune=True)
-    encoder = MORSpyManyPooled(vocab, device, vocab_size=80)
-    reranker = Reranker(vocab_size=80, head_num=3)
 
+    encoder = MORSpyManyPooled(num_heads=args.num_heads)
     encoder.load_state_dict(torch.load(f"{encoder_dir}model.pth"))
     encoder.to(device)
-    
-    reranker.to(device)
+
+    model = MORSpyFull(
+        vocab=vocab,
+        encoder=encoder,
+        head_num=args.num_heads,
+        neg_weight=hprams.neg_weight,
+        neut_weight=hprams.neut_weight,
+        assas_weight=hprams.assas_weight,
+        device=device,
+        freeze_encoder=True,
+    )
+    model.to(device)
 
     results = train(
         hprams=hprams,
-        encoder=encoder,
-        reranker=reranker,
+        model=model,
         train_loader=train_dataloader,
         valid_loader=valid_dataloader,
         console_logger=console_logger,
@@ -221,11 +214,11 @@ def main(args):
 
     results.save_results(output_dir)
     model_path = f"{output_dir}model.pth"
-    torch.save(reranker.state_dict(), model_path)
+    torch.save(model.state_dict(), model_path)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-enc', type=str, help="Encoder directory", default=f"{BASE_DIR}model_data/many_test_two_no_spacing_loss/")
+    parser.add_argument('-enc', type=str, help="Encoder directory", default=f"{BASE_DIR}model_data/encoder_portfolio/")
     parser.add_argument('-cuda', type=str, help="Use CUDA [Y/n]", default='Y')
     parser.add_argument('-out', type=str, help="Output directory path", default=f"{BASE_DIR}model_data/testing/")
 
@@ -238,14 +231,17 @@ if __name__ == "__main__":
     parser.add_argument('-b_dir', type=str, help="Train Board Directory", default=f"{BASE_DIR}data/codewords_full_w_assassin_valid.json")
     parser.add_argument('-b_dir_valid', type=str, help="Validation Board Directory", default=f"{BASE_DIR}data/codewords_full_w_assassin_mini.json")
 
-    # Model Directories
-    parser.add_argument('-save_dir', type=str, help="Directory to save model path and training info", default=f"{BASE_DIR}model_data/testing/")
+    # Reward Weighting
+    parser.add_argument('-neut_weight', type=float, default=2.0)
+    parser.add_argument('-neg_weight', type=float, default=0.0)
+    parser.add_argument('-assas_weight', type=float, default=-10.0)
 
     # Hyperparameters
     parser.add_argument('-lr', type=float, help="Learning Rate", default=0.0001)
     parser.add_argument('-gamma', type=float, help="Gamma", default=0.9)
     parser.add_argument('-w_decay', type=float, help="Weight Decay", default=0.1)
     parser.add_argument('-sw', type=int, help="Search Window", default=80)
+    parser.add_argument('-num_heads', type=int, help="Number of encoder heads", default=3)
     parser.add_argument('-dynamic_board', type=str, help="Randomize Board States: [Y/n]", default='n')
     args = parser.parse_args()
     main(args)

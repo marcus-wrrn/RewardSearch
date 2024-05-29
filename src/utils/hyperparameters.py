@@ -23,6 +23,7 @@ class HyperParameters:
         self.emb_size = self._get_emb_size()
         self.seperator = args.sep
         self.burst_counter = False
+        self.num_heads = args.num_heads if args.num_heads else None
     
     def _get_emb_size(self):
         if (self.backbone == "all-mpnet-base-v2"):
@@ -64,6 +65,10 @@ class RerankerHyperParameter:
         self.weight_decay = args.w_decay
         self.search_window = args.sw
         self.dynamic_board = convert_args_str_to_bool(args.dynamic_board)
+
+        self.neut_weight = args.neut_weight
+        self.neg_weight = args.neg_weight
+        self.assas_weight = args.assas_weight
     
     def save_params(self, filepath: str):
         data = {

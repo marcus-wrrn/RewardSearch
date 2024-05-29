@@ -22,7 +22,7 @@ class MORSpyMaster(nn.Module):
 
     Uses default search head configuration
     """
-    def __init__(self, vocab: VectorSearch, device: torch.device, neutral_weight=1.0, negative_weight=0.0, assas_weights=-10.0, vocab_size=80, search_pruning=False, bias=True):
+    def __init__(self, vocab: VectorSearch, device: torch.device, neutral_weight=1.0, negative_weight=0.0, assas_weights=-10.0, vocab_size=80, bias=True):
         super().__init__()
         
         self.vocab_size = vocab_size
@@ -41,8 +41,6 @@ class MORSpyMaster(nn.Module):
 
         self.vocab = vocab
         self.device = device
-
-        self.search_pruning = search_pruning
     
     def update_weights(self, neg_weight: float, neut_weight: float, assas_weight: float):
         self.neg_weight = neg_weight
