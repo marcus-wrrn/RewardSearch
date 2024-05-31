@@ -3,6 +3,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from utils.vector_search import VectorSearch
 import utils.utilities as utils
+import numpy as np
 
 class ManyOutObj:
     """Output object of the ManytoNum models, contains all info needed for training and testing"""
@@ -158,7 +159,12 @@ class Reranker:
     
     def rerank_and_process(self, model_out: Tensor, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assas_embs: Tensor) -> ManyOutObj:
         texts, embs, dist = self.vocab.search(model_out, num_results=self.vocab_size)
-        embs = torch.tensor(embs).to(self.device).squeeze(1)
+        embs = torch.tensor(embs).squeeze(1)
+        perm = torch.randperm(embs.shape[1])
+
+        texts = np.take_along_axis(texts, perm.unsqueeze(0).numpy(), axis=1)
+        embs = embs.index_select(1, perm).to(self.device)
+
         out_obj = self._find_search_embeddings(embs, pos_embs, neg_embs, neut_embs, assas_embs)
 
         out_obj.add_text(texts)
