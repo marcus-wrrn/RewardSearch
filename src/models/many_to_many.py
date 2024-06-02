@@ -111,23 +111,26 @@ class MORSpyFull(nn.Module):
                 encoder_out_pooled, tri_out = self.process_encoder(pos_embs, neg_embs, neut_embs, assas_emb)
         else:
             encoder_out_pooled, tri_out = self.process_encoder(pos_embs, neg_embs, neut_embs, assas_emb)
-        
+
         logits = self.reranker.rerank_and_process(encoder_out_pooled, pos_embs, neg_embs, neut_embs, assas_emb)
 
         num_heads = tri_out.shape[1]
         if num_heads != self.head_num:
             raise ValueError(f"Number of heads must be the same size, expected {self.head_num} got {num_heads}")
         
-        sim_scores = []
+        #sim_scores = []
         # TODO: Replace with attention mechanism (matmul)
-        for i in range(self.head_num):
-            head = tri_out[:, i, :]
-            head = head.unsqueeze(1)
+        # for i in range(self.head_num):
+        #     head = tri_out[:, i, :]
+        #     head = head.unsqueeze(1)
 
-            cos_sim = F.cosine_similarity(head, logits.word_embs, dim=2)
-            sim_scores.append(cos_sim)
+        #     cos_sim = F.cosine_similarity(head, logits.word_embs, dim=2)
+        #     sim_scores.append(cos_sim)
+        layer_normed = F.normalize(tri_out, p=2, dim=2)
+        sim_scores = torch.matmul(layer_normed, logits.word_embs.transpose(1, 2))
 
-        sim_scores = torch.stack(sim_scores, dim=2)
+
+        #sim_scores = torch.stack(sim_scores, dim=2)
         sim_scores = sim_scores.view(sim_scores.shape[0], -1)
         out = self.fc(sim_scores)
 

@@ -99,10 +99,10 @@ def slice_board_embeddings(embs: Tensor):
     return embs[:, :rand_num, :]
 
 
-def cluster_embeddings(embs: Tensor):
+def cluster_embeddings(embs: Tensor, dim=1):
     """Mean pool and normalize all embeddings"""
-    out = torch.mean(embs,dim=1)
-    out = F.normalize(out, p=2, dim=1)
+    out = torch.mean(embs,dim=dim)
+    out = F.normalize(out, p=2, dim=dim)
     return out
 
 def console_logger(logger_name: str, level=logging.DEBUG) -> logging.Logger:
