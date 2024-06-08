@@ -116,7 +116,7 @@ class KeypointTriangulationLoss(RewardSearchLoss):
 
 class MultiHeadRewardSearch(nn.Module):
     """RewardSearch for multi head models"""
-    def __init__(self, model_marg=0.2, search_marg=0.7, emb_marg=1.0):
+    def __init__(self, model_marg=0.2, search_marg=0.7, emb_marg=0.5):
         super().__init__()
         
         self.m_marg = model_marg
@@ -141,26 +141,36 @@ class MultiHeadRewardSearch(nn.Module):
         embs = F.normalize(embs, p=2, dim=dim)
         return embs
     
-    def _dynamic_triplet_loss(self, x: Tensor, p=2):
+    def _dynamic_triplet_loss(self, x: Tensor):
         #TODO: Replace with matrix multiplication for greater efficiency
         batch_size, num_embeddings, emb_size = x.shape
-        if num_embeddings < 3:
-            raise ValueError("Number of embeddings per batch must be at least 3")
+        if num_embeddings == 1:
+            return 0.0
         
-        total_loss = None
+        # if num_embeddings < 3:
+        #     raise ValueError("Number of embeddings per batch must be at least 3")
+
         # Create triplets such that each embedding gets to be an anchor, positive, and negative
-        for i in range(num_embeddings):
-            anchor = x[:, i, :]
-            positive = x[:, 0, :] if i == num_embeddings - 1 else x[:, i + 1, :]
-            negative = x[:, -1, :] if i == 0 else x[:, i - 1, :]
+        x_transpose = x.transpose(1, 2)
 
-            pos_sim = F.cosine_similarity(anchor, positive, dim=1)
-            neg_sim = F.cosine_similarity(anchor, negative, dim=1)
+        attention = torch.matmul(x, x_transpose)
+        tril_mask = torch.tril(torch.ones_like(attention), diagonal=-1)
+        attention = attention * tril_mask
+
+        avg_sim = attention.sum(dim=[1, 2]) / num_embeddings
+
+        # for i in range(num_embeddings):
+        #     anchor = x[:, i, :]
+        #     positive = x[:, 0, :] if i == num_embeddings - 1 else x[:, i + 1, :]
+        #     negative = x[:, -1, :] if i == 0 else x[:, i - 1, :]
+
+        #     pos_sim = F.cosine_similarity(anchor, positive, dim=1)
+        #     neg_sim = F.cosine_similarity(anchor, negative, dim=1)
             
-            loss = F.relu((neg_sim - pos_sim) + self.emb_marg).mean()
-            total_loss = loss if not total_loss else total_loss + loss
-
-        return total_loss
+        #     loss = F.relu((neg_sim - pos_sim) + self.emb_marg).mean()
+        #     total_loss = loss if not total_loss else total_loss + loss
+        loss = F.relu(avg_sim - self.emb_marg).mean()
+        return loss.mean()
     
     def forward(self, model_logits: ManyOutObj, tri_out: Tensor, pos_encs: Tensor, neg_encs: Tensor, neut_encs: Tensor, assas_enc: Tensor):
         model_out_expanded = model_logits.encoder_out.unsqueeze(1)
@@ -168,11 +178,11 @@ class MultiHeadRewardSearch(nn.Module):
         pos_score, neg_score, neut_score, assas_score = self._calc_cos_sim(model_out_expanded, pos_encs, neg_encs, neut_encs, assas_enc)
         pos_score, neg_score = self._calc_final_scores(pos_score, neg_score, neut_score, assas_score)
         
-        stable_loss = F.relu((neg_score - pos_score) + self.m_marg).mean()
+        #stable_loss = F.relu((neg_score - pos_score) + self.m_marg).mean()
         search_loss = F.triplet_margin_loss(model_logits.encoder_out, model_logits.max_embs_pooled, model_logits.min_embs_pooled, margin=self.s_marg)
         spacing_loss = self._dynamic_triplet_loss(tri_out)
 
-        loss = stable_loss + np.e**search_loss + spacing_loss
+        loss =  np.e**search_loss + spacing_loss
         return loss
 
 

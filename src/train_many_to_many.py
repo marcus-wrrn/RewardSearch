@@ -2,6 +2,7 @@ import torch
 from torch.optim.lr_scheduler import ExponentialLR
 from loss_fns.loss import MultiHeadRewardSearch
 from torch.utils.data import DataLoader
+import torch.nn.functional as F
 from models.many_to_many import MORSpyManyPooled
 from datasets.dataset import CodeNamesDataset, SentenceNamesDataset
 import datetime
@@ -21,7 +22,7 @@ import random
 # NOTE: There is also an experimental spacing loss that is applied between the multi-heads, still unsure of its impact on performance
 
 def init_hyperparameters(hp: HyperParameters, model: MORSpyManyPooled):
-    loss_fn = MultiHeadRewardSearch(model_marg=hp.model_marg, search_marg=hp.search_marg, emb_marg=0.2)
+    loss_fn = MultiHeadRewardSearch(model_marg=hp.model_marg, search_marg=hp.search_marg, emb_marg=0.8)
     optimizer = torch.optim.AdamW(model.parameters(), lr=hp.learning_rate, weight_decay=hp.weight_decay)
     scheduler = ExponentialLR(optimizer, gamma=hp.gamma)
     return loss_fn, optimizer, scheduler
@@ -91,10 +92,13 @@ def train(hprams: HyperParameters, model: MORSpyManyPooled, reranker: Reranker, 
 
             model_logits = reranker.rerank_and_process(model_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
 
+            avg_word_embs = model_logits.word_embs.mean(dim=1)
+            avg_word_embs = F.normalize(avg_word_embs, p=2, dim=1)
+
             loss = loss_fn(model_logits, tri_out, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
             loss.backward()
 
-            epoch_logger.update_results(model_logits.encoder_out, model_logits.h_score_emb, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
+            epoch_logger.update_results(model_logits.encoder_out, avg_word_embs, pos_embeddings, neg_embeddings, neut_embeddings, assas_embeddings)
             epoch_logger.update_loss(loss)
 
             optimizer.step()

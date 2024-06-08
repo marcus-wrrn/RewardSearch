@@ -74,11 +74,32 @@ class Reranker:
         # Find the total number of correct guesses, equal to the index of the first non-zero value
         num_correct = torch.argmax(rewards, dim=2)
 
+        # Find the difference between the lowest correct guess and the highest incorrect guess
+        difference = combined_scores.gather(2, num_correct.unsqueeze(2)).squeeze(2) - combined_scores.gather(2, (num_correct + 1).unsqueeze(2)).squeeze(2)
+        difference = np.e**torch.abs(difference)
+
+
+        batch_size, seq_length, word_shape = combined_scores.shape
+        mask = torch.arange(word_shape, device=self.device).expand(batch_size, seq_length, word_shape) < num_correct.unsqueeze(2)
+        
+        # Apply the mask to combined_scores
+        masked_combined_scores = combined_scores * mask
+
+        # Calculate the sum of the scores with the mask applied
+        sum_scores = masked_combined_scores.sum(dim=2)
+
+        # Calculate the number of correct guesses, ensuring no division by zero
+        num_correct_float = num_correct.float()
+        num_correct_nonzero = torch.where(num_correct_float == 0, torch.ones_like(num_correct_float), num_correct_float)
+
+        # Calculate the mean of the scores, avoiding NaN and Inf values
+        mean_scores = (sum_scores / num_correct_nonzero) * 10
+
         if reverse:
             # Find the inverse of the positive reward (num incorrect)
-            return (pos_reward.shape[0] - num_correct)
+            return (pos_reward.shape[0] - num_correct) - difference - mean_scores
         
-        return num_correct 
+        return num_correct + difference + mean_scores
 
     def _get_reward_tensor(self, size: int, weight: float, reverse: bool) -> Tensor:
         reward = torch.ones(size).to(self.device) * weight

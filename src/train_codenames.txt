@@ -16,3 +16,6 @@ python3 ./src/train_codenames.py -e 10 -b 500 -code_data "./data/words_extended.
 python3 ./src/train_many_to_many.py -e 10 -b 500 -code_data "./data/words_extended.json" -guess_data "./data/codewords_full_w_assassin_valid.json" -val_guess_data "./data/codewords_full_w_assassin_mini.json" -name "model" -dir "./model_data/many_test_one/" -backbone "all-mpnet-base-v2" -sep ' ' -dynamic_board Y
 
 python3 ./src/train_reranker.py -e 5 -b 400 -enc ./model_data/encoder_pth/ -v_dir ./data/words_extended.json -dynamic_board Y -neut_weight 2.0
+
+
+python3 ./src/train_many_to_many.py -code_data ./data/words_extended.json -dir ./model_data/exponential_difference_with_mean_scores_no_spacing/ -dynamic_board Y -neut_weight 2.0 -num_heads 3 -e 5

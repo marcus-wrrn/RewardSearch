@@ -5,6 +5,7 @@ from models.scoring_models import ScoringModel
 from models.reranker import Reranker
 from datasets.dataset import CodeNamesDataset
 from torch.utils.data import DataLoader
+import torch.nn.functional as F
 import utils.utilities as utils
 from utils.hidden_vars import BASE_DIR
 from utils.vector_search import VectorSearch
@@ -16,7 +17,7 @@ import random
 
 
 def init_hyperparameters(hp: RerankerHyperParameter, model: ScoringModel):
-    loss_fn = torch.nn.L1Loss()
+    loss_fn = torch.nn.MSELoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=hp.learning_rate, weight_decay=hp.weight_decay)
     scheduler = ExponentialLR(optimizer, gamma=hp.gamma)
     return loss_fn, optimizer, scheduler
@@ -108,6 +109,7 @@ def train(hprams: RerankerHyperParameter,
             for j, (scores, word_embs) in enumerate(zip(batched_scores, batched_word_embs)):
                 score_out = model(pos_embs[j], neg_embs[j], neut_embs[j], assas_emb[j], word_embs)
                 score_out = score_out.squeeze(1)
+                scores = F.normalize(scores, p=1, dim=0)
                 
                 loss = loss_fn(score_out, scores)
                 loss.backward()
