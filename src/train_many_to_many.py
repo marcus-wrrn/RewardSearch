@@ -167,6 +167,7 @@ def main(args):
     # Save hyperparameters
     hp_path = args.dir + "hyperparameters.json"
     hpram.save_params(hp_path)
+    vector_db.save_index(args.dir)
 
 if __name__ == "__main__":
     # Most default values can be kept the same, but can be changed if needed

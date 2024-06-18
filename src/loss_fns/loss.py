@@ -146,7 +146,6 @@ class MultiHeadRewardSearch(nn.Module):
         batch_size, num_embeddings, emb_size = x.shape
         if num_embeddings == 1:
             return 0.0
-        
         # if num_embeddings < 3:
         #     raise ValueError("Number of embeddings per batch must be at least 3")
 
@@ -180,9 +179,9 @@ class MultiHeadRewardSearch(nn.Module):
         
         #stable_loss = F.relu((neg_score - pos_score) + self.m_marg).mean()
         search_loss = F.triplet_margin_loss(model_logits.encoder_out, model_logits.max_embs_pooled, model_logits.min_embs_pooled, margin=self.s_marg)
-        spacing_loss = self._dynamic_triplet_loss(tri_out)
+        #spacing_loss = self._dynamic_triplet_loss(tri_out)
 
-        loss =  np.e**search_loss + spacing_loss
+        loss =  np.e**search_loss #+ spacing_loss
         return loss
 
 
@@ -191,11 +190,9 @@ class RerankerLoss(nn.Module):
     def __init__(self) -> None:
         super().__init__()
 
-        self.ce_loss = nn.CrossEntropyLoss()
+        self.ce_loss = nn.CosineEmbeddingLoss()
     
-    def forward(self, logits: ManyOutObj):
-        scores = logits.emb_scores
-        scores_normed = F.normalize(scores, p=2, dim=1)
-        rerank_out = logits.reranker_out
-        loss = self.ce_loss(rerank_out, scores_normed)
+    def forward(self, model_out: Tensor, label: Tensor, search_embs: Tensor):
+        target = torch.ones(label.shape[0], device=label.device, dtype=torch.float32)
+        loss = self.ce_loss(model_out, label, target)
         return loss

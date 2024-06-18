@@ -87,13 +87,13 @@ class Reranker:
 
         # Calculate the sum of the scores with the mask applied
         sum_scores = masked_combined_scores.sum(dim=2)
+        std_dev = torch.std(masked_combined_scores, dim=2)
 
         # Calculate the number of correct guesses, ensuring no division by zero
         num_correct_float = num_correct.float()
         num_correct_nonzero = torch.where(num_correct_float == 0, torch.ones_like(num_correct_float), num_correct_float)
 
-        # Calculate the mean of the scores, avoiding NaN and Inf values
-        mean_scores = (sum_scores / num_correct_nonzero) * 10
+        mean_scores = (sum_scores / num_correct_nonzero) * 5
 
         if reverse:
             # Find the inverse of the positive reward (num incorrect)
@@ -127,7 +127,7 @@ class Reranker:
     
     
     def _get_total_reward(self, word_encs: Tensor, pos_encs: Tensor, neg_encs: Tensor, neut_encs: Tensor, assas_encs: Tensor, reverse: bool) -> Tensor:
-        # Find scores
+        # TODO: Improve Find scores
         pos_scores = F.cosine_similarity(word_encs, pos_encs, dim=3)
         neg_scores = F.cosine_similarity(word_encs, neg_encs, dim=3)
         neut_scores = F.cosine_similarity(word_encs, neut_encs, dim=3)
@@ -135,8 +135,8 @@ class Reranker:
         # Get reward
         primary_reward = self._get_primary_reward(pos_scores, neg_scores, neut_scores, assas_scores, reverse=reverse)
         secondary_reward = self._get_secondary_reward(neg_scores, neut_scores, assas_scores, reverse=reverse)
-
-        return primary_reward + secondary_reward
+        tot_reward = primary_reward + secondary_reward
+        return tot_reward
 
     def _find_scored_embeddings(self, reward: Tensor, word_embeddings: Tensor):
         # Find lowest scoring and highest scored indices

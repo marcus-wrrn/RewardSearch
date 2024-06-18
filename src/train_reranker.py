@@ -29,7 +29,7 @@ def validate(model: MORSpyFull,
             len(valid_loader.dataset), 
             len(valid_loader), 
             name_model="Validation Model Reranker",
-            name_search="Validation Algorithmic Reranker",
+            name_search="Validation Clustered Search Embs",
             device=device
         )
     for data in valid_loader:
@@ -40,22 +40,14 @@ def validate(model: MORSpyFull,
         neut_embs = neut_embs.to(device)
         assas_emb = assas_emb.to(device)
 
-        logits = model(pos_embs, neg_embs, neut_embs, assas_emb)
+        out, labels, search_embs = model(pos_embs, neg_embs, neut_embs, assas_emb)
+        search_embs = search_embs.mean(dim=1)
 
-        loss = loss_fn(logits)
-
-        # Find most similar output
-        word_indices = torch.max(logits.reranker_out, dim=1).indices
-
-        # No need to expand for every embedding dimension if gathering across num_outputs
-        word_indices = word_indices.unsqueeze(1).expand(-1, 768)  # Prepare for gather
-
-        # Gather embeddings
-        word_embeddings = torch.gather(logits.word_embs, 1, word_indices.unsqueeze(1)).squeeze(1)
+        loss = loss_fn(out, labels, search_embs)
 
         val_logger.update_results(
-            model_out=word_embeddings,
-            search_out=logits.h_score_emb,
+            model_out=out,
+            search_out=search_embs,
             pos_emb=pos_embs,
             neg_emb=neg_embs,
             neut_emb=neut_embs,
@@ -85,7 +77,7 @@ def train(hprams: RerankerHyperParameter,
             len(train_loader.dataset), 
             len(train_loader), 
             name_model="Train Model Reranker",
-            name_search="Train Algorithmic Reranker",
+            name_search="Train Clustered Search Embs",
             device=device
         )
 
@@ -112,8 +104,8 @@ def train(hprams: RerankerHyperParameter,
 
             optimizer.zero_grad()
             
-            logits = model(pos_embs, neg_embs, neut_embs, assas_emb)
-           
+            out, labels, search_embs = model(pos_embs, neg_embs, neut_embs, assas_emb)
+            search_embs = search_embs.mean(dim=1)
 
             # target_idx = logits.emb_ids
             
@@ -121,22 +113,22 @@ def train(hprams: RerankerHyperParameter,
             # target_tensor = torch.zeros(target_idx.shape[0], logits.reranker_out.shape[1], dtype=torch.float32, device=device)
             # target_tensor.scatter_(1, target_idx.unsqueeze(1), 1)
 
-            loss = loss_fn(logits)
+            loss = loss_fn(out, labels, search_embs)
 
             loss.backward()
 
-            # Find most similar output
-            word_indices = torch.max(logits.reranker_out, dim=1).indices
+            # # Find most similar output
+            # word_indices = torch.max(logits.reranker_out, dim=1).indices
 
-            # No need to expand for every embedding dimension if gathering across num_outputs
-            word_indices = word_indices.unsqueeze(1).expand(-1, 768)  # Prepare for gather
+            # # No need to expand for every embedding dimension if gathering across num_outputs
+            # word_indices = word_indices.unsqueeze(1).expand(-1, 768)  # Prepare for gather
 
-            # Gather embeddings
-            word_embeddings = torch.gather(logits.word_embs, 1, word_indices.unsqueeze(1)).squeeze(1)
+            # # Gather embeddings
+            # word_embeddings = torch.gather(logits.word_embs, 1, word_indices.unsqueeze(1)).squeeze(1)
 
             epoch_logger.update_results(
-                model_out=word_embeddings, 
-                search_out=logits.h_score_emb, 
+                model_out=out, 
+                search_out=search_embs, 
                 pos_emb=pos_embs, 
                 neg_emb=neg_embs, 
                 neut_emb=neut_embs, 

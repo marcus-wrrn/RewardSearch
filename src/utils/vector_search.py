@@ -33,6 +33,19 @@ class VectorSearch:
     def index_to_texts(self, index):
         return self.vocab_texts[index]
     
-    def save_index(self, filepath: str):
-        faiss.write_index(self.index, filepath)
+    def save_index(self, filedir: str):
+        index_path = filedir + 'index'
+        faiss.write_index(self.index, index_path)
+        vocab_path = filedir + 'vocab.npy'
+        np.save(vocab_path, self.vocab_embeddings)
+        text_path = filedir + 'vocab_texts.npy'
+        np.save(text_path, self.vocab_texts)
+    
+    def load_index(self, filedir: str):
+        index_path = filedir + 'index'
+        self.index = faiss.read_index(index_path)
+        vocab_path = filedir + 'vocab.npy'
+        self.vocab_embeddings = np.load(vocab_path)
+        text_path = filedir + 'vocab_texts.npy'
+        self.vocab_texts = np.load(text_path)
     

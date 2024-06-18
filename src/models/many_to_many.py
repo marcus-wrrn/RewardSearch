@@ -80,11 +80,29 @@ class MORSpyFull(nn.Module):
         self.vocab_size = vocab_size
         self.head_num = head_num
 
-        input_size = vocab_size * head_num
-        self.fc = nn.Sequential(
-            nn.Linear(input_size, int(input_size * 1.5)),
+        self.value_gen = nn.Sequential(
+            nn.Linear(768, 812),
             nn.ReLU(),
-            nn.Linear(int(input_size * 1.5), vocab_size),
+            nn.Linear(812, 768),
+        )
+
+        self.query_gen = nn.Sequential(
+            nn.Linear(768, 812),
+            nn.ReLU(),
+            nn.Linear(812, 768)
+        )
+
+        # Keys are just the word embeddings using key gen leads to similar results with more computation
+        # self.key_gen = nn.Sequential(
+        #     nn.Linear(768, 800),
+        #     nn.ReLU(),
+        #     nn.Linear(800, 768)
+        # )
+
+        self.fc = nn.Sequential(
+            nn.Linear(768, 812),
+            nn.ReLU(),
+            nn.Linear(812, 768),
         )
 
         self.encoder = encoder
@@ -97,13 +115,22 @@ class MORSpyFull(nn.Module):
             assas_weight=assas_weight,
             device=device
         )
-
+        self.device = device
         self.freeze_encoder = freeze_encoder
 
     def process_encoder(self, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assas_emb: Tensor) -> tuple[Tensor, Tensor]:
         """Maps input embedding space, to response space"""
         encoder_logits, encoder_head_out = self.encoder(pos_embs, neg_embs, neut_embs, assas_emb)
         return encoder_logits, encoder_head_out
+    
+    def retrieve_embeddings(self, search_heads: Tensor, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assas_emb: Tensor) -> tuple[Tensor, Tensor]:
+        logits = []
+        for i in range(self.head_num):
+            logits.append(self.reranker.rerank_and_process(search_heads[:, i], pos_embs, neg_embs, neut_embs, assas_emb))
+        
+        word_embs = torch.cat([logs.word_embs for logs in logits], dim=1)
+        scores = torch.cat([logs.emb_scores for logs in logits], dim=1).unsqueeze(-1)
+        return word_embs, scores
 
     def forward(self, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assas_emb: Tensor):
         if self.freeze_encoder:
@@ -111,30 +138,50 @@ class MORSpyFull(nn.Module):
                 encoder_out_pooled, tri_out = self.process_encoder(pos_embs, neg_embs, neut_embs, assas_emb)
         else:
             encoder_out_pooled, tri_out = self.process_encoder(pos_embs, neg_embs, neut_embs, assas_emb)
-
-        logits = self.reranker.rerank_and_process(encoder_out_pooled, pos_embs, neg_embs, neut_embs, assas_emb)
-
+        
         num_heads = tri_out.shape[1]
         if num_heads != self.head_num:
             raise ValueError(f"Number of heads must be the same size, expected {self.head_num} got {num_heads}")
         
-        #sim_scores = []
-        # TODO: Replace with attention mechanism (matmul)
-        # for i in range(self.head_num):
-        #     head = tri_out[:, i, :]
-        #     head = head.unsqueeze(1)
+        #word_embs, scores = self.retrieve_embeddings(tri_out, pos_embs, neg_embs, neut_embs, assas_emb)
+        logits = self.reranker.rerank_and_process(encoder_out_pooled, pos_embs, neg_embs, neut_embs, assas_emb)
+        word_embs = logits.word_embs
+        scores = logits.emb_scores.unsqueeze(-1)
 
-        #     cos_sim = F.cosine_similarity(head, logits.word_embs, dim=2)
-        #     sim_scores.append(cos_sim)
-        layer_normed = F.normalize(tri_out, p=2, dim=2)
-        sim_scores = torch.matmul(layer_normed, logits.word_embs.transpose(1, 2))
+        # Generate score influenced values
+        values = self.value_gen(word_embs * scores)
+        
+        # Generate Queries
+        tri_out = F.normalize(tri_out, p=2, dim=2)
+        queries = torch.stack([self.query_gen(tri_out[:, i]) for i in range(num_heads)], dim=1)
 
+        # attention
+        sim_scores = torch.matmul(queries, word_embs.transpose(1, 2))
+        sim_scores = F.softmax(sim_scores, dim=2)
+        sim_scores = torch.matmul(sim_scores, values)
 
-        #sim_scores = torch.stack(sim_scores, dim=2)
-        sim_scores = sim_scores.view(sim_scores.shape[0], -1)
+        sim_scores = sim_scores.sum(dim=1)
+
+        # Add and norm
+        sim_scores = F.normalize(sim_scores + encoder_out_pooled, p=2, dim=1)
         out = self.fc(sim_scores)
+        out = F.normalize(out, p=2, dim=1)
 
-        logits.reranker_out = out
-        return logits
+        # Find highest scoring results for comparison
+        _, highest_scoring_index = torch.topk(scores, k=5, dim=1)
+        highest_scoring_index = highest_scoring_index.squeeze(-1)
+        batch_indices = torch.arange(out.shape[0], device=self.device).unsqueeze(1).repeat(1, 5)
+        highest_scoring_embs = word_embs[batch_indices, highest_scoring_index]
+        highest_scoring_embs = utils.cluster_embeddings(highest_scoring_embs)
+
+        texts, search_embs, dist = self.reranker.vocab.search(out, num_results=5)
+        # embs = torch.tensor(embs).squeeze(1)
+        # perm = torch.randperm(embs.shape[1])
+
+        # texts = np.take_along_axis(texts, perm.unsqueeze(0).numpy(), axis=1)
+        # embs = embs.index_select(1, perm).to(self.device)
+        search_embs = torch.tensor(search_embs, device=self.device).squeeze(1)
+        
+        return out, highest_scoring_embs, search_embs
 
 
