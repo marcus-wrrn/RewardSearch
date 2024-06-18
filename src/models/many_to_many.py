@@ -2,12 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-#from transformers import DebertaConfig, DebertaModel, DebertaTokenizer
 from utils.vector_search import VectorSearch
 import utils.utilities as utils
 from models.reranker import Reranker
-
-
 
 class MORSpyManyPooled(nn.Module):
     def __init__(self, 
@@ -42,7 +39,6 @@ class MORSpyManyPooled(nn.Module):
         concatenated = self._get_combined_input(pos_embs, neg_embs, neut_embs, assas_emb)
         intermediary_out = self.fc(concatenated)
         
-        # This should be in a list but I am getting strange results after loading and I am testing to see if it's due to pytorch loading the state dict incorrectly
         model_outs = [F.normalize(layer(intermediary_out), p=2, dim=1) for layer in self.head_layers]
         # Cluster embeddings together
         model_out_stacked = torch.stack(model_outs, dim=1)
@@ -64,7 +60,7 @@ class MORSpyManyPooled(nn.Module):
         return model_out_pooled, model_out_stacked
     
 
-class MORSpyFull(nn.Module):
+class RetrievalTransformerNAR(nn.Module):
     def __init__(self, 
                  vocab: VectorSearch,
                  encoder: MORSpyManyPooled,
@@ -131,6 +127,21 @@ class MORSpyFull(nn.Module):
         word_embs = torch.cat([logs.word_embs for logs in logits], dim=1)
         scores = torch.cat([logs.emb_scores for logs in logits], dim=1).unsqueeze(-1)
         return word_embs, scores
+    
+    def _retrieve_and_score(self, search_emb: Tensor, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assas_emb: Tensor) -> tuple[Tensor, Tensor]:
+        logits = self.reranker.rerank_and_process(search_emb, pos_embs, neg_embs, neut_embs, assas_emb)
+        word_embs = logits.word_embs
+        scores = logits.emb_scores.unsqueeze(-1)
+        return word_embs, scores
+    
+    def _score_based_attn(self, queries: Tensor, word_embs: Tensor, scores: Tensor) -> Tensor:
+        # Generate values
+        values = self.value_gen(word_embs * scores)
+        attn_weights = torch.matmul(queries, word_embs.transpose(1, 2))
+        attn_weights = F.softmax(attn_weights, dim=2)
+        attn_weights = torch.matmul(attn_weights, values)
+        # Add weights, (number is relative to number of search heads)
+        return attn_weights
 
     def forward(self, pos_embs: Tensor, neg_embs: Tensor, neut_embs: Tensor, assas_emb: Tensor):
         if self.freeze_encoder:
@@ -143,28 +154,18 @@ class MORSpyFull(nn.Module):
         if num_heads != self.head_num:
             raise ValueError(f"Number of heads must be the same size, expected {self.head_num} got {num_heads}")
         
-        #word_embs, scores = self.retrieve_embeddings(tri_out, pos_embs, neg_embs, neut_embs, assas_emb)
-        logits = self.reranker.rerank_and_process(encoder_out_pooled, pos_embs, neg_embs, neut_embs, assas_emb)
-        word_embs = logits.word_embs
-        scores = logits.emb_scores.unsqueeze(-1)
-
-        # Generate score influenced values
-        values = self.value_gen(word_embs * scores)
+        word_embs, scores = self._retrieve_and_score(encoder_out_pooled, pos_embs, neg_embs, neut_embs, assas_emb)
         
         # Generate Queries
         tri_out = F.normalize(tri_out, p=2, dim=2)
         queries = torch.stack([self.query_gen(tri_out[:, i]) for i in range(num_heads)], dim=1)
 
-        # attention
-        sim_scores = torch.matmul(queries, word_embs.transpose(1, 2))
-        sim_scores = F.softmax(sim_scores, dim=2)
-        sim_scores = torch.matmul(sim_scores, values)
+        attn_weights = self._score_based_attn(queries, word_embs, scores)
 
-        sim_scores = sim_scores.sum(dim=1)
-
-        # Add and norm
-        sim_scores = F.normalize(sim_scores + encoder_out_pooled, p=2, dim=1)
-        out = self.fc(sim_scores)
+        # Add and norm with pooled encoder output as residual (leads to better results than using tri_head)
+        attn_weights = attn_weights.sum(dim=1) 
+        attn_weights = F.normalize(attn_weights + encoder_out_pooled, p=2, dim=1)
+        out = self.fc(attn_weights)
         out = F.normalize(out, p=2, dim=1)
 
         # Find highest scoring results for comparison
@@ -175,11 +176,6 @@ class MORSpyFull(nn.Module):
         highest_scoring_embs = utils.cluster_embeddings(highest_scoring_embs)
 
         texts, search_embs, dist = self.reranker.vocab.search(out, num_results=5)
-        # embs = torch.tensor(embs).squeeze(1)
-        # perm = torch.randperm(embs.shape[1])
-
-        # texts = np.take_along_axis(texts, perm.unsqueeze(0).numpy(), axis=1)
-        # embs = embs.index_select(1, perm).to(self.device)
         search_embs = torch.tensor(search_embs, device=self.device).squeeze(1)
         
         return out, highest_scoring_embs, search_embs

@@ -1,36 +1,37 @@
 import argparse
 import torch
-from models.many_to_many import MORSpyManyPooled
-from models.scoring_models import ScoringModel
-from models.reranker import Reranker
+from models.many_to_many import MORSpyManyPooled, RetrievalTransformerNAR
 from datasets.dataset import CodeNamesDataset
 from torch.utils.data import DataLoader
-import torch.nn.functional as F
 import utils.utilities as utils
 from utils.hidden_vars import BASE_DIR
 from utils.vector_search import VectorSearch
 from utils.logger import TrainLogger, EpochLoggerCombined
+from loss_fns.loss import RerankerLoss
 from torch.optim.lr_scheduler import ExponentialLR
 from utils.hyperparameters import RerankerHyperParameter
 import logging
 import random
 
 
-def init_hyperparameters(hp: RerankerHyperParameter, model: ScoringModel):
-    loss_fn = torch.nn.MSELoss()
+def init_hyperparameters(hp: RerankerHyperParameter, model: RetrievalTransformerNAR):
+    loss_fn_rerank = RerankerLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=hp.learning_rate, weight_decay=hp.weight_decay)
     scheduler = ExponentialLR(optimizer, gamma=hp.gamma)
-    return loss_fn, optimizer, scheduler
+    return loss_fn_rerank, optimizer, scheduler
 
 @torch.no_grad()
-def validate(model: ScoringModel,
-             reranker: Reranker,
-             encoder: MORSpyManyPooled,
+def validate(model: RetrievalTransformerNAR,
              valid_loader: DataLoader, 
-             loss_fn: torch.nn.L1Loss, 
+             loss_fn: RerankerLoss, 
              device: torch.device) -> EpochLoggerCombined:
-    
-    total_loss = []
+    val_logger = EpochLoggerCombined(
+            len(valid_loader.dataset), 
+            len(valid_loader), 
+            name_model="Validation Model Reranker",
+            name_search="Validation Clustered Search Embs",
+            device=device
+        )
     for data in valid_loader:
         pos_embs, neg_embs, neut_embs, assas_emb = data[1]
 
@@ -39,27 +40,25 @@ def validate(model: ScoringModel,
         neut_embs = neut_embs.to(device)
         assas_emb = assas_emb.to(device)
 
-        model_out_pooled, model_out_stacked = encoder(pos_embs, neg_embs, neut_embs, assas_emb)
-        # Detach encoder for memory saving
-        #encoder.to('cpu')
+        out, labels, search_embs = model(pos_embs, neg_embs, neut_embs, assas_emb)
+        search_embs = search_embs.mean(dim=1)
 
-        logits = reranker.rerank_and_process(model_out_pooled, pos_embs, neg_embs, neut_embs, assas_emb)
-        batched_scores = logits.emb_scores
-        batched_word_embs = logits.word_embs
-        for j, (scores, word_embs) in enumerate(zip(batched_scores, batched_word_embs)):
-            score_out = model(pos_embs[j], neg_embs[j], neut_embs[j], assas_emb[j], word_embs)
-            score_out = score_out.squeeze(1)
-            
-            loss = loss_fn(score_out, scores)
+        loss = loss_fn(out, labels, search_embs)
 
-            total_loss.append(loss.item())
-    loss = sum(total_loss) / len(total_loss)
-    return loss
+        val_logger.update_results(
+            model_out=out,
+            search_out=search_embs,
+            pos_emb=pos_embs,
+            neg_emb=neg_embs,
+            neut_emb=neut_embs,
+            assas_emb=assas_emb
+        )
+
+        val_logger.update_loss(loss)
+    return val_logger
 
 def train(hprams: RerankerHyperParameter, 
-          model: ScoringModel, 
-          reranker: Reranker,
-          encoder: MORSpyManyPooled,
+          model: RetrievalTransformerNAR, 
           train_loader: DataLoader,
           valid_loader: DataLoader,
           console_logger: logging.Logger,
@@ -73,7 +72,15 @@ def train(hprams: RerankerHyperParameter,
     console_logger.info("Started Training")
     for epoch in range(1, hprams.n_epochs + 1):
         console_logger.info(f"Epoch: {epoch}")
-        total_loss = []
+
+        epoch_logger = EpochLoggerCombined(
+            len(train_loader.dataset), 
+            len(train_loader), 
+            name_model="Train Model Reranker",
+            name_search="Train Clustered Search Embs",
+            device=device
+        )
+
         for i, data in enumerate(train_loader, 0):
             if ((i + 1) % 100 == 0):
                 console_logger.info(f"Iteration: {i + 1}/{len(train_loader)}")
@@ -85,7 +92,6 @@ def train(hprams: RerankerHyperParameter,
             neut_embs = neut_embs.to(device)
             assas_emb = assas_emb.to(device)
 
-            
             # Randomize board state
             if hprams.dynamic_board:
                 pos_num = random.randint(1, pos_embs.shape[1])
@@ -98,41 +104,38 @@ def train(hprams: RerankerHyperParameter,
 
             optimizer.zero_grad()
             
-            model_out_pooled, model_out_stacked = encoder(pos_embs, neg_embs, neut_embs, assas_emb)
-            # Detach encoder for memory saving
-            #encoder.to('cpu')
+            out, labels, search_embs = model(pos_embs, neg_embs, neut_embs, assas_emb)
+            search_embs = search_embs.mean(dim=1)
 
-            logits = reranker.rerank_and_process(model_out_pooled, pos_embs, neg_embs, neut_embs, assas_emb)
-            batched_scores = logits.emb_scores
-            batched_word_embs = logits.word_embs
-            batched_loss = []
-            for j, (scores, word_embs) in enumerate(zip(batched_scores, batched_word_embs)):
-                score_out = model(pos_embs[j], neg_embs[j], neut_embs[j], assas_emb[j], word_embs)
-                score_out = score_out.squeeze(1)
-                scores = F.normalize(scores, p=1, dim=0)
-                
-                loss = loss_fn(score_out, scores)
-                loss.backward()
+            loss = loss_fn(out, labels, search_embs)
 
-                batched_loss.append(loss.item())
-            
-            loss = sum(batched_loss) / len(batched_loss)
-            console_logger.info(f"Epoch: {epoch} Iteration: {i + 1}/{len(train_loader)} Loss: {loss}")
-            total_loss.append(loss)
+            loss.backward()
+
+            epoch_logger.update_results(
+                model_out=out, 
+                search_out=search_embs, 
+                pos_emb=pos_embs, 
+                neg_emb=neg_embs, 
+                neut_emb=neut_embs, 
+                assas_emb=assas_emb,
+            )
+            epoch_logger.update_loss(loss)
 
             optimizer.step()
 
         # Validate model output
         console_logger.info("Validating model: Note that validation set uses static board size, if training on dynamic board, results may differ significantly")
-        valid_loss = validate(model, reranker, encoder, valid_loader, loss_fn, device)
-        # train_logger.add_loggers(epoch_logger, valid_logger)
+        valid_logger = validate(model, valid_loader, loss_fn, device)
+        train_logger.add_loggers(epoch_logger, valid_logger)
 
         scheduler.step()
 
         print(f"========================================================================================")
-        console_logger.info(f"Epoch: {epoch} Loss: {sum(total_loss) / len(total_loss)}")
+        epoch_logger.print_log()
         print(f"========================================================================================")
-        console_logger.info(f"Validation Loss: {valid_loss}")
+        valid_logger.print_log()
+
+    return train_logger
             
 
 def main(args):
@@ -142,8 +145,6 @@ def main(args):
     encoder_dir = args.enc
     output_dir = args.out
     device = utils.get_device(args.cuda)
-
-    
 
     board_dir = args.b_dir
     board_dir_valid = args.b_dir_valid
@@ -165,30 +166,28 @@ def main(args):
     encoder.load_state_dict(torch.load(f"{encoder_dir}model.pth"))
     encoder.to(device)
 
-    reranker = Reranker(
+    model = RetrievalTransformerNAR(
         vocab=vocab,
-        vocab_size=80,
+        encoder=encoder,
+        head_num=args.num_heads,
         neg_weight=hprams.neg_weight,
         neut_weight=hprams.neut_weight,
         assas_weight=hprams.assas_weight,
         device=device,
-
+        freeze_encoder=True,
     )
-
-    model = ScoringModel()
     model.to(device)
 
-    train(
+    results = train(
         hprams=hprams,
         model=model,
-        reranker=reranker,
-        encoder=encoder,
         train_loader=train_dataloader,
         valid_loader=valid_dataloader,
         console_logger=console_logger,
         device=device
     )
 
+    results.save_results(output_dir)
     model_path = f"{output_dir}model.pth"
     torch.save(model.state_dict(), model_path)
 
