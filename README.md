@@ -33,7 +33,3 @@ The model has been shown to work on longer texts and in some cases performs bett
 ### Frontend
 This code is used purely for training and testing the RewardSearch model. For a working fronted please refer to the project `https://github.com/aclarke500/qmind-codenames-front-end` which is used to play against the model. Models trained here can be imported to the frontend to play against.
 
-### Further Information
-We have provided the most recent draft of our paper within the project. We are currently working on getting it put on arxiv and will be eventually released as part of the CUCAI conference proceedings. For any additional questions feel free to email `18mgw1@queensu.ca` about the project. 
-
-
